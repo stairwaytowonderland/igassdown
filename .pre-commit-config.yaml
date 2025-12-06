@@ -1,0 +1,51 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending
+      - id: end-of-file-fixer
+      - id: check-added-large-files
+      - id: check-ast
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+        # https://github.com/pre-commit/pre-commit-hooks?tab=readme-ov-file#check-yaml
+        # --allow-multiple-documents: allow yaml files which use the multi-document syntax
+        # --unsafe: Instead of loading the files, simply parse them for syntax
+        args: [--allow-multiple-documents, --unsafe]
+        # Alternative, as `--unsafe` "removes all guarantees of portability to other yaml implementations".
+        #exclude: ^serverless\.yml$
+      - id: name-tests-test
+      - id: check-docstring-first
+      - id: check-merge-conflict
+
+      # - id: no-commit-to-branch
+      #   # https://github.com/pre-commit/pre-commit-hooks?tab=readme-ov-file#no-commit-to-branch
+      #   # Both main and master are protected by default if no branch argument is set.
+      #   args: [--branch, main, --branch, master]
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.0.0
+    hooks:
+      - id: conventional-pre-commit
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        name: black
+        args: [.,--line-length=88]
+
+  - repo: local
+    hooks:
+      - id: isort
+        name: isort
+        entry: isort --profile black .
+        language: python
+
+      - id: autoflake
+        name: autoflake
+        entry: autoflake --in-place --remove-all-unused-imports --remove-unused-variables --exclude=__init__.py .
+        language: python

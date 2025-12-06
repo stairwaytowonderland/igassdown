@@ -1,0 +1,8 @@
+.bak/
+*.bak/
+*.bak
+
+.venv/
+__pycache__/
+
+output/
