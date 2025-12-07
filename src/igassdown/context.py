@@ -16,9 +16,8 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import requests
 import requests.utils
 
-from .config import BrowserDefaults, Config, IphoneDefaults
+from .config import BrowserDefaults, Config, IphoneDefaults, StandardHeaders
 from .exceptions import *
-from .structures import JSONRequest
 from .utils import json_decode, json_encode
 
 
@@ -42,6 +41,74 @@ def copy_session(
     # Override default timeout behavior.
     new.request = partial(new.request, timeout=request_timeout)
     return new
+
+
+class SessionRequest:
+    """Parameters for a JSON request to Instagram.
+
+    Attributes:
+        path: Path part of the URL (without host).
+        params: Parameters for the JSON request.
+        host: Host part of the URL.
+        session: requests.Session to use for this request.
+        response_headers: If set, the response headers will be written to this dictionary.
+        use_post: Whether to use POST instead of GET for this request.
+        allow_redirects: Whether to allow redirects for this request.
+    """
+
+    def __init__(
+        self,
+        path: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
+        host: str = StandardHeaders.HOST,
+        session: Optional[requests.Session] = None,
+        allow_redirects: bool = False,
+    ):
+        self._path = path
+        self._params = params
+        self._host = host
+        self._session = session
+        self._allow_redirects = allow_redirects
+
+    @property
+    def params(self) -> Optional[Dict[str, Any]]:
+        return self._params
+
+    @property
+    def is_graphql_query(self) -> bool:
+        return "query_hash" in self._params and "graphql/query" in self._path
+
+    @property
+    def is_doc_id_query(self) -> bool:
+        return "doc_id" in self._params and "graphql/query" in self._path
+
+    @property
+    def is_iphone_query(self) -> bool:
+        return self._host == "i.instagram.com"
+
+    @property
+    def is_other_query(self) -> bool:
+        return (
+            not self.is_graphql_query
+            and not self.is_doc_id_query
+            and self._host == "www.instagram.com"
+        )
+
+    def get(self, url: Optional[str] = None) -> requests.Response:
+        response = self._session.get(
+            url or "https://{0}/{1}".format(self._host, self._path),
+            params=self._params,
+            allow_redirects=self._allow_redirects,
+        )
+        return response
+
+    def post(self, url: Optional[str] = None) -> requests.Response:
+        response = self._session.post(
+            url or "https://{0}/{1}".format(self._host, self._path),
+            data=self._params,
+            allow_redirects=self._allow_redirects,
+        )
+        return response
 
 
 class IgdownloaderContext:
@@ -587,78 +654,82 @@ class IgdownloaderContext:
 
     def get_json(
         self,
-        _path: Optional[str] = None,
-        options: Optional[JSONRequest] = None,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        host: str = StandardHeaders.HOST,
+        session: Optional[requests.Session] = None,
+        response_headers: Optional[Dict[str, Any]] = None,
+        use_post: bool = False,
+        allow_redirects: bool = False,
         _attempt=1,
     ) -> Dict[str, Any]:
         """JSON request to Instagram.
 
         Args:
-            _path: Path part of the URL (without host); if None, taken from `options.path`.
-            options: :class:`JSONRequest` Parameters for the JSON request.
+            path: Path part of the URL (without host).
+            params: Parameters for the JSON request.
+            host: Host part of the URL.
+            session: requests.Session to use for this request.
+            response_headers: If set, the response headers will be written to this dictionary.
+            use_post: Whether to use POST instead of GET for this request.
+            allow_redirects: Whether to allow redirects for this request.
             _attempt: Current attempt number for this request.
+
         Returns:
             Dict[str, Any]: The decoded JSON response as a dictionary.
+
         Raises:
             AbortDownloadException: When the server responds with 'feedback_required'/'checkpoint_required'/'challenge_required'
             QueryReturnedBadRequestException: When the server responds with a 400 (and not 'feedback_required'/'checkpoint_required'/'challenge_required').
             QueryReturnedNotFoundException: When the server responds with a 404.
             ConnectionException: When query repeatedly failed.
         """
-        path = _path or options.path
-        params = options.params
-        host = options.host
-        session = options.session
-        response_headers = options.response_headers
-        use_post = options.use_post
-        allow_redirects = options.allow_redirects
-        is_graphql_query = "query_hash" in params and "graphql/query" in path
-        is_doc_id_query = "doc_id" in params and "graphql/query" in path
-        is_iphone_query = host == "i.instagram.com"
-        is_other_query = (
-            not is_graphql_query and not is_doc_id_query and host == "www.instagram.com"
+        request = SessionRequest(
+            path=path,
+            params=params,
+            host=host,
+            session=session or self._session,
+            allow_redirects=allow_redirects,
         )
-        sess = session if session else self._session
         try:
             self.do_sleep()
-            if is_graphql_query:
-                self._rate_controller.wait_before_query(params["query_hash"])
-            if is_doc_id_query:
-                self._rate_controller.wait_before_query(params["doc_id"])
-            if is_iphone_query:
+            if request.is_graphql_query:
+                self._rate_controller.wait_before_query(request.params["query_hash"])
+            if request.is_doc_id_query:
+                self._rate_controller.wait_before_query(request.params["doc_id"])
+            if request.is_iphone_query:
                 self._rate_controller.wait_before_query("iphone")
-            if is_other_query:
+            if request.is_other_query:
                 self._rate_controller.wait_before_query("other")
             if use_post:
-                resp = sess.post(
-                    "https://{0}/{1}".format(host, path),
-                    data=params,
-                    allow_redirects=allow_redirects,
-                )
+                response = request.post()
             else:
-                resp = sess.get(
-                    "https://{0}/{1}".format(host, path),
-                    params=params,
-                    allow_redirects=allow_redirects,
-                )
-            if resp.status_code in self.fatal_status_codes:
+                response = request.get()
+            if response.status_code in self.fatal_status_codes:
                 redirect = (
-                    " redirect to {}".format(resp.headers["location"])
-                    if "location" in resp.headers
+                    " redirect to {}".format(response.headers["location"])
+                    if "location" in response.headers
                     else ""
                 )
                 body = ""
-                if resp.headers["Content-Type"].startswith("application/json"):
+                if response.headers["Content-Type"].startswith("application/json"):
                     body = (
-                        ": " + resp.text[:500] + ("…" if len(resp.text) > 501 else "")
+                        ": "
+                        + response.text[:500]
+                        + ("…" if len(response.text) > 501 else "")
                     )
                 raise AbortDownloadException(
                     'Query to https://{}/{} responded with "{} {}"{}{}'.format(
-                        host, path, resp.status_code, resp.reason, redirect, body
+                        host,
+                        path,
+                        response.status_code,
+                        response.reason,
+                        redirect,
+                        body,
                     )
                 )
-            while resp.is_redirect:
-                redirect_url = resp.headers["location"]
+            while response.is_redirect:
+                redirect_url = response.headers["location"]
                 self.log(
                     "\nHTTP redirect from https://{0}/{1} to {2}".format(
                         host, path, redirect_url
@@ -676,7 +747,7 @@ class IgdownloaderContext:
                         + "some time, recreate the session and try again"
                     )
                 if redirect_url.startswith("https://{}/".format(host)):
-                    resp = sess.get(
+                    response = request.get(
                         (
                             redirect_url
                             if redirect_url.endswith("/")
@@ -689,28 +760,28 @@ class IgdownloaderContext:
                     break
             if response_headers is not None:
                 response_headers.clear()
-                response_headers.update(resp.headers)
-            if resp.status_code == 400:
+                response_headers.update(response.headers)
+            if response.status_code == 400:
                 with suppress(json.decoder.JSONDecodeError):
-                    if resp.json().get("message") in [
+                    if response.json().get("message") in [
                         "feedback_required",
                         "checkpoint_required",
                         "challenge_required",
                     ]:
                         # Raise AbortDownloadException in case of substantial Instagram
                         # requirements to stop producing more requests
-                        raise AbortDownloadException(self._response_error(resp))
-                raise QueryReturnedBadRequestException(self._response_error(resp))
-            if resp.status_code == 404:
-                raise QueryReturnedNotFoundException(self._response_error(resp))
-            if resp.status_code == 429:
-                raise TooManyRequestsException(self._response_error(resp))
-            if resp.status_code != 200:
-                raise ConnectionException(self._response_error(resp))
+                        raise AbortDownloadException(self._response_error(response))
+                raise QueryReturnedBadRequestException(self._response_error(response))
+            if response.status_code == 404:
+                raise QueryReturnedNotFoundException(self._response_error(response))
+            if response.status_code == 429:
+                raise TooManyRequestsException(self._response_error(response))
+            if response.status_code != 200:
+                raise ConnectionException(self._response_error(response))
             else:
-                resp_json = resp.json()
+                resp_json = response.json()
             if "status" in resp_json and resp_json["status"] != "ok":
-                raise ConnectionException(self._response_error(resp))
+                raise ConnectionException(self._response_error(response))
             return resp_json
         except (
             ConnectionException,
@@ -726,25 +797,23 @@ class IgdownloaderContext:
             self.error(error_string + " [retrying; skip with ^C]", repeat_at_end=False)
             try:
                 if isinstance(err, TooManyRequestsException):
-                    if is_graphql_query:
-                        self._rate_controller.handle_429(params["query_hash"])
-                    if is_doc_id_query:
-                        self._rate_controller.handle_429(params["doc_id"])
-                    if is_iphone_query:
+                    if request.is_graphql_query:
+                        self._rate_controller.handle_429(request.params["query_hash"])
+                    if request.is_doc_id_query:
+                        self._rate_controller.handle_429(request.params["doc_id"])
+                    if request.is_iphone_query:
                         self._rate_controller.handle_429("iphone")
-                    if is_other_query:
+                    if request.is_other_query:
                         self._rate_controller.handle_429("other")
 
                 return self.get_json(
                     path,
-                    JSONRequest(
-                        params=params,
-                        host=host,
-                        session=session,
-                        response_headers=response_headers,
-                        use_post=use_post,
-                        allow_redirects=allow_redirects,
-                    ),
+                    params=request.params,
+                    host=host,
+                    session=session,
+                    response_headers=response_headers,
+                    use_post=use_post,
+                    allow_redirects=allow_redirects,
                     _attempt=_attempt + 1,
                 )
             except KeyboardInterrupt:
@@ -780,10 +849,8 @@ class IgdownloaderContext:
 
             resp_json = self.get_json(
                 "graphql/query",
-                JSONRequest(
-                    params={"query_hash": query_hash, "variables": variables_json},
-                    session=tmpsession,
-                ),
+                params={"query_hash": query_hash, "variables": variables_json},
+                session=tmpsession,
             )
         if "status" not in resp_json:
             self.error('GraphQL response did not contain a "status" field.')
@@ -818,15 +885,13 @@ class IgdownloaderContext:
 
             resp_json = self.get_json(
                 "graphql/query",
-                JSONRequest(
-                    params={
-                        "variables": variables_json,
-                        "doc_id": doc_id,
-                        "server_timestamps": "true",
-                    },
-                    session=tmpsession,
-                    use_post=True,
-                ),
+                params={
+                    "variables": variables_json,
+                    "doc_id": doc_id,
+                    "server_timestamps": "true",
+                },
+                session=tmpsession,
+                use_post=True,
             )
         if "status" not in resp_json:
             self.error('GraphQL response did not contain a "status" field.')
@@ -919,12 +984,10 @@ class IgdownloaderContext:
             response_headers = dict()  # type: Dict[str, Any]
             response = self.get_json(
                 path,
-                JSONRequest(
-                    params=params,
-                    host="i.instagram.com",
-                    session=tempsession,
-                    response_headers=response_headers,
-                ),
+                params=params,
+                host="i.instagram.com",
+                session=tempsession,
+                response_headers=response_headers,
             )
 
             # Extract the ig-set-* headers and use them in the next request

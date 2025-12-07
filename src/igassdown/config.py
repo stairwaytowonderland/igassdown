@@ -7,7 +7,13 @@ from typing import Any, Dict, Union
 
 
 class BrowserDefaults(Enum):
-    """Default values for browser emulation."""
+    """Default values for browser emulation.
+
+    Attributes:
+        USER_AGENT: The default User-Agent string for browser emulation.
+        APP_ID: The default application ID for browser emulation.
+        DOC_ID: The default document ID for browser emulation.
+    """
 
     USER_AGENT: str = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
@@ -17,7 +23,15 @@ class BrowserDefaults(Enum):
 
 
 class IphoneDefaults(Enum):
-    """Default values for iPhone emulation."""
+    """Default values for iPhone emulation.
+
+    Attributes:
+        USER_AGENT: The default User-Agent string for iPhone emulation.
+        APP_ID: The default application ID for iPhone emulation.
+        BLOCKS_VERSION_ID: The default blocks version ID for iPhone emulation.
+        CAPABILITIES: The default capabilities string for iPhone emulation.
+        HTTP_ENGINE: The default HTTP engine for iPhone emulation.
+    """
 
     USER_AGENT: str = (
         "Instagram 361.0.0.35.82 (iPad13,8; iOS 18_0; en_US; en-US; scale=2.00; 2048x2732; 674117118) AppleWebKit/420+"
@@ -32,18 +46,6 @@ class IphoneDefaults(Enum):
 
 class StandardHeaders:
     """Default HTTP header values.
-
-    Parameters:
-        accept_encoding: Value for the Accept-Encoding header.
-        accept_language: Value for the Accept-Language header.
-        connection: Value for the Connection header.
-        content_length: Value for the Content-Length header.
-        host: Value for the Host header.
-        origin: Value for the Origin header.
-        referer: Value for the Referer header.
-        user_agent: Value for the User-Agent header.
-        x_instagram_ajax: Value for the X-Instagram-AJAX header.
-        x_requested_with: Value for the X-Requested-With header.
 
     Attributes:
         ACCEPT_ENCODING: Value for the Accept-Encoding header.
@@ -93,6 +95,21 @@ class StandardHeaders:
         self.X_INSTAGRAM_AJAX = x_instagram_ajax
         self.X_REQUESTED_WITH = x_requested_with
 
+    """Initialize StandardHeaders with optional custom values.
+
+    Args:
+        accept_encoding: Value for the Accept-Encoding header.
+        accept_language: Value for the Accept-Language header.
+        connection: Value for the Connection header.
+        content_length: Value for the Content-Length header.
+        host: Value for the Host header.
+        origin: Value for the Origin header.
+        referer: Value for the Referer header.
+        user_agent: Value for the User-Agent header.
+        x_instagram_ajax: Value for the X-Instagram-AJAX header.
+        x_requested_with: Value for the X-Requested-With header.
+    """
+
     def to_dict(self) -> Dict[str, Union[str, int]]:
         """Returns the headers as a dictionary.
 
@@ -116,9 +133,6 @@ class StandardHeaders:
 class Config:
     """Default output directory.
 
-    Parameters:
-        script_dir: The directory of the current script.
-
     Attributes:
         output_dir: The default output directory path.
         browser_defaults: The default browser emulation settings.
@@ -126,6 +140,12 @@ class Config:
     """
 
     def __init__(self, script_dir: Union[str, Path] = Path(__file__).parent) -> None:
+        """
+        Initialize the Config class.
+
+        Args:
+            script_dir: The directory of the current script.
+        """
         self._output_dir = Path(f"{script_dir.parent.parent}/output")
         self._browser_defaults = BrowserDefaults
         self._iphone_defaults = IphoneDefaults
@@ -151,6 +171,7 @@ class Config:
     @property
     def iphone_defaults(self) -> IphoneDefaults:
         """Returns the iPhone default settings.
+
         Returns:
             IphoneDefaults: The iPhone default settings.
         """

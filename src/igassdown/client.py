@@ -4,6 +4,7 @@ import platform
 import sys
 import tempfile
 from contextlib import contextmanager
+from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
@@ -13,8 +14,7 @@ import urllib3
 from .config import AssetExtensions, Config
 from .context import IgdownloaderContext
 from .exceptions import *
-from .igstructures import IGFeedRequestVariables, PostNode, TimelineData, VideoCandidate
-from .structures import IGAsset
+from .structures import IGFeedRequestVariables, PostNode, TimelineData, VideoCandidate
 from .utils import convert_timestamp, dataclass_from_dict
 
 
@@ -118,6 +118,24 @@ def _retry_on_connection_error(func: Callable) -> Callable:
                 raise ConnectionException(error_string) from None
 
     return call
+
+
+@dataclass
+class MediaAsset:
+    """Represents an Instagram media asset.
+
+    Attributes:
+        url: URL of the media asset.
+        code: Shortcode of the Instagram post.
+        taken_at: Timestamp when the media was taken.
+    """
+
+    id: str
+    code: str
+    date: str
+    timestamp: int
+    ext: Optional[str] = None
+    url: Optional[str] = None
 
 
 class Igdownloader:
@@ -475,7 +493,7 @@ class Igdownloader:
             )
 
     @staticmethod
-    def extract_asset_info(media: PostNode, index: int = 0) -> Optional[IGAsset]:
+    def extract_asset_info(media: PostNode, index: int = 0) -> Optional[MediaAsset]:
         """Extract the image URL from a post's image_versions2.candidates, using the specified index.
 
         Args:
@@ -483,7 +501,7 @@ class Igdownloader:
             index: Index of the candidate to extract (default is 0 for largest image)
 
         Returns:
-            IGAsset: An IGAsset object containing media details, or None if no media found
+            MediaAsset: An MediaAsset object containing media details, or None if no media found
         """
 
         # node = post.get("node", {})
@@ -492,7 +510,7 @@ class Igdownloader:
         # video_versions = node.get("video_versions", [])
         image_candidates = media.image_versions2.candidates
         video_versions = media.video_versions
-        media_asset = IGAsset(
+        media_asset = MediaAsset(
             id=media.id,
             code=media.code,
             date=convert_timestamp(media.taken_at, pretty=True),
@@ -519,7 +537,7 @@ class Igdownloader:
     @_retry_on_connection_error
     def download_asset(
         self,
-        media: IGAsset,
+        media: MediaAsset,
         output_dir: str,
         _attempt: int = 1,
     ) -> bool:
@@ -528,7 +546,7 @@ class Igdownloader:
         Retries on connection errors.
 
         Args:
-            media: IGAsset object containing media details
+            media: MediaAsset object containing media details
             output_dir: Directory to save the downloaded image
             _attempt: Current attempt number for retry logic (used internally)
 
