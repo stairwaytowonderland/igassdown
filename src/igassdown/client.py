@@ -5,6 +5,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
@@ -539,6 +540,9 @@ class Igdownloader:
         self,
         media: MediaAsset,
         output_dir: str,
+        filename: Optional[str] = None,
+        use_media_time: bool = True,
+        force: bool = False,
         _attempt: int = 1,
     ) -> bool:
         """Download a single image from a URL to the specified directory.
@@ -548,29 +552,82 @@ class Igdownloader:
         Args:
             media: MediaAsset object containing media details
             output_dir: Directory to save the downloaded image
+            filename: Optional filename to save as (without extension). If None, a default name is generated.
+            force: If True, forces download even if file exists.
             _attempt: Current attempt number for retry logic (used internally)
 
         Returns:
             bool: True if download was successful, False otherwise
         """
         try:
+            # Extract filename from URL or create one based on timestamp
+            _filename = filename or (
+                f"{media.id}_{media.code}_{convert_timestamp(media.timestamp)}"
+            )
+            ext = media.ext
+            nominal_filename = f"{filename or _filename}.{ext}"
+            filepath = os.path.join(output_dir, nominal_filename)
+
+            if os.path.isfile(filepath) and not force:
+                self.context.log(
+                    "File '{}' already exists. Not downloading {}.".format(
+                        filepath, AssetExtensions[ext.upper()].value.lower()
+                    ),
+                    flush=True,
+                )
+                return False
+
             self.context.log(
                 "Downloading {} from '{}'...".format(
-                    (AssetExtensions[media.ext.upper()].value.lower()),
+                    AssetExtensions[ext.upper()].value.lower(),
                     media.url,
                 )
             )
 
             # Download the image
-            response = requests.get(media.url, timeout=30)
-            response.raise_for_status()
+            try:
+                response = self.context.get_raw(media.url)
+            except Exception:
+                self.context.log(
+                    "Retrying download of {} from '{}' without session...".format(
+                        (AssetExtensions[ext.upper()].value.lower()),
+                        media.url,
+                    )
+                )
+                response = requests.get(media.url, timeout=30)
+                response.raise_for_status()
 
-            # Extract filename from URL or create one based on timestamp
-            filename = f"{media.id}_{media.code}_{convert_timestamp(media.timestamp)}.{media.ext}"
-            filepath = os.path.join(output_dir, filename)
+            if "Content-Type" in response.headers and response.headers["Content-Type"]:
+                ext = header_extension = (
+                    (response.headers["Content-Type"].split(";")[0].split("/")[-1])
+                    .lower()
+                    .replace("jpeg", AssetExtensions.PIC.value)
+                )
+                _filename += f".{header_extension}"
+            else:
+                _filename = nominal_filename
+
+            filepath = os.path.join(output_dir, _filename)
+            if _filename != nominal_filename and os.path.isfile(filepath) and not force:
+                self.context.log(
+                    "File '{}' already exists. Not downloading {}.".format(
+                        filepath, AssetExtensions[ext.upper()].value.lower()
+                    ),
+                    flush=True,
+                )
+                return False
+
+            self.context.download_count += 1
 
             # Save the image
-            self.context.write_raw(response.content, filepath)
+            self.context.write_raw(response, filepath)
+            if use_media_time:
+                os.utime(filepath, (datetime.now().timestamp(), media.timestamp))
+                self.context.log(
+                    "Set file modification time to {}.".format(
+                        convert_timestamp(media.timestamp, pretty=True)
+                    )
+                )
 
             return True
 

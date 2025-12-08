@@ -188,7 +188,9 @@ def _main(
             all_posts = igdownloader.get_posts(
                 username=target_profile, output_dir=output_dir
             )
-            igdownloader.context.log(f"Assets downloaded: {len(all_posts)}")
+            igdownloader.context.log(
+                f"Assets downloaded: {igdownloader.context.download_count}"
+            )
         except Exception as e:
             print(f"Error fetching posts: {e}", file=sys.stderr)
             exit_code = ExitCode.UNEXPECTED_ERROR

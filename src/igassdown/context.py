@@ -70,9 +70,31 @@ class SessionRequest:
         self._session = session
         self._allow_redirects = allow_redirects
 
+    """Initializes a SessionRequest instance.
+
+    Args:
+        path: Path part of the URL (without host).
+        params: Parameters for the JSON request.
+        host: Host part of the URL.
+        session: requests.Session to use for this request.
+        allow_redirects: Whether to allow redirects for this request.
+    """
+
+    @property
+    def session(self) -> Optional[requests.Session]:
+        return self._session
+
+    @session.setter
+    def session(self, value: Optional[requests.Session]) -> None:
+        self._session = value
+
     @property
     def params(self) -> Optional[Dict[str, Any]]:
         return self._params
+
+    @params.setter
+    def params(self, value: Optional[Dict[str, Any]]) -> None:
+        self._params = value
 
     @property
     def is_graphql_query(self) -> bool:
@@ -94,19 +116,55 @@ class SessionRequest:
             and self._host == "www.instagram.com"
         )
 
-    def get(self, url: Optional[str] = None) -> requests.Response:
+    def _normalize_args(self, keys: List[str] | Dict[str, Any], **kwargs) -> None:
+        """Normalize kwargs for requests.
+
+        Args:
+            kwargs: Keyword arguments to normalize.
+        Returns:
+            Dict[str, Any]: Normalized keyword arguments.
+        """
+        if isinstance(keys, Dict):
+            for key, value in keys.items():
+                kwargs[key] = value
+
+        elif isinstance(keys, List):
+            for key in keys:
+                if key in kwargs:
+                    del kwargs[key]
+
+        else:
+            raise ValueError("keys must be a list or dict")
+
+        return kwargs
+
+    def get(self, url: Optional[str] = None, **kwargs) -> requests.Response:
         response = self._session.get(
             url or "https://{0}/{1}".format(self._host, self._path),
-            params=self._params,
-            allow_redirects=self._allow_redirects,
+            **self._normalize_args(
+                {
+                    "allow_redirects": kwargs.get(
+                        "allow_redirects", self._allow_redirects
+                    ),
+                    "params": kwargs.get("params", self._params),
+                },
+                **kwargs,
+            ),
         )
         return response
 
-    def post(self, url: Optional[str] = None) -> requests.Response:
+    def post(self, url: Optional[str] = None, **kwargs) -> requests.Response:
         response = self._session.post(
             url or "https://{0}/{1}".format(self._host, self._path),
-            data=self._params,
-            allow_redirects=self._allow_redirects,
+            **self._normalize_args(
+                {
+                    "allow_redirects": kwargs.get(
+                        "allow_redirects", self._allow_redirects
+                    ),
+                    "data": kwargs.get("data", self._params),
+                },
+                **kwargs,
+            ),
         )
         return response
 
@@ -200,6 +258,21 @@ class IgdownloaderContext:
 
         # Cache profile from id (mapping from id to Profile)
         self.profile_id_cache: Dict[int, Any] = dict()
+
+        self._download_count: int = 0
+
+    @property
+    def download_count(self) -> int:
+        """Number of downloads performed so far.
+
+        Returns:
+            int: Number of downloads performed so far.
+        """
+        return self._download_count
+
+    @download_count.setter
+    def download_count(self, value: int) -> None:
+        self._download_count = value
 
     @property
     def browser_defaults(self) -> BrowserDefaults:
@@ -474,16 +547,20 @@ class IgdownloaderContext:
 
         # Make a request to Instagram's root URL, which will set the session's csrftoken cookie
         # Not using self.get_json() here, because we need to access the cookie
-        session.get("https://www.instagram.com/")
+        # session.get("https://www.instagram.com/")
+        request = SessionRequest(session=session)
+        request.get("https://www.instagram.com/")
+
         # Add session's csrftoken cookie to session headers
         csrf_token = session.cookies.get_dict()["csrftoken"]
         session.headers.update({"X-CSRFToken": csrf_token})
+        request.session = session
 
         self.do_sleep()
         enc_password = "#PWD_INSTAGRAM_BROWSER:0:{}:{}".format(
             int(datetime.now().timestamp()), passwd
         )
-        login = session.post(
+        login = request.post(
             "https://www.instagram.com/api/v1/web/accounts/login/ajax/",
             data={"enc_password": enc_password, "username": user},
             allow_redirects=True,
@@ -694,17 +771,17 @@ class IgdownloaderContext:
         try:
             self.do_sleep()
             if request.is_graphql_query:
-                self._rate_controller.wait_before_query(request.params["query_hash"])
+                self._rate_controller.wait_before_query(params["query_hash"])
             if request.is_doc_id_query:
-                self._rate_controller.wait_before_query(request.params["doc_id"])
+                self._rate_controller.wait_before_query(params["doc_id"])
             if request.is_iphone_query:
                 self._rate_controller.wait_before_query("iphone")
             if request.is_other_query:
                 self._rate_controller.wait_before_query("other")
             if use_post:
-                response = request.post()
+                response = request.post(params=params)
             else:
-                response = request.get()
+                response = request.get(params=params)
             if response.status_code in self.fatal_status_codes:
                 redirect = (
                     " redirect to {}".format(response.headers["location"])
@@ -754,7 +831,6 @@ class IgdownloaderContext:
                             else redirect_url + "/"
                         ),
                         params=params,
-                        allow_redirects=allow_redirects,
                     )
                 else:
                     break
@@ -798,9 +874,9 @@ class IgdownloaderContext:
             try:
                 if isinstance(err, TooManyRequestsException):
                     if request.is_graphql_query:
-                        self._rate_controller.handle_429(request.params["query_hash"])
+                        self._rate_controller.handle_429(params["query_hash"])
                     if request.is_doc_id_query:
-                        self._rate_controller.handle_429(request.params["doc_id"])
+                        self._rate_controller.handle_429(params["doc_id"])
                     if request.is_iphone_query:
                         self._rate_controller.handle_429("iphone")
                     if request.is_other_query:
@@ -808,7 +884,7 @@ class IgdownloaderContext:
 
                 return self.get_json(
                     path,
-                    params=request.params,
+                    params=params,
                     host=host,
                     session=session,
                     response_headers=response_headers,
@@ -1085,18 +1161,19 @@ class IgdownloaderContext:
             ConnectionException: When download failed.
         """
         with self.get_anonymous_session() as anonymous_session:
-            resp = anonymous_session.get(url, stream=True)
-        if resp.status_code == 200:
-            resp.raw.decode_content = True
-            return resp
+            request = SessionRequest(session=anonymous_session)
+            response = request.get(url, stream=True)
+        if response.status_code == 200:
+            response.raw.decode_content = True
+            return response
         else:
-            if resp.status_code == 403:
+            if response.status_code == 403:
                 # suspected invalid URL signature
-                raise QueryReturnedForbiddenException(self._response_error(resp))
-            if resp.status_code == 404:
+                raise QueryReturnedForbiddenException(self._response_error(response))
+            if response.status_code == 404:
                 # 404 not worth retrying.
-                raise QueryReturnedNotFoundException(self._response_error(resp))
-            raise ConnectionException(self._response_error(resp))
+                raise QueryReturnedNotFoundException(self._response_error(response))
+            raise ConnectionException(self._response_error(response))
 
     def get_and_write_raw(self, url: str, filename: str) -> None:
         """Downloads and writes anonymously-requested raw data into a file.
