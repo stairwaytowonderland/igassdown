@@ -33,6 +33,7 @@ class ExitCode(IntEnum):
     LOGIN_FAILURE = 3
     DOWNLOAD_ABORTED = 4
     USER_ABORTED = 5
+    SAVE_FAILURE = 6
     UNEXPECTED_ERROR = 99
 
 
@@ -190,8 +191,11 @@ def _main(
             )
             igdownloader.context.log(f"Assets downloaded: {download_count}")
         except Exception as e:
-            print(f"Error fetching posts: {e}", file=sys.stderr)
             exit_code = ExitCode.UNEXPECTED_ERROR
+            print(
+                f"Error fetching posts ({ExitCode.UNEXPECTED_ERROR.name}: {exit_code}):\n\t{e}",
+                file=sys.stderr,
+            )
 
     return exit_code
 

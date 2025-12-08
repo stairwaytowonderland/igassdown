@@ -260,6 +260,7 @@ class IgdownloaderContext:
         self.profile_id_cache: Dict[int, Any] = dict()
 
         self._download_count: int = 0
+        self._save_count: int = 0
 
     @property
     def download_count(self) -> int:
@@ -273,6 +274,28 @@ class IgdownloaderContext:
     @download_count.setter
     def download_count(self, value: int) -> None:
         self._download_count = value
+
+    @property
+    def save_count(self) -> int:
+        """Number of downloads performed so far.
+
+        Returns:
+            int: Number of downloads performed so far.
+        """
+        return self._save_count
+
+    @save_count.setter
+    def save_count(self, value: int) -> None:
+        self._save_count = value
+
+    @property
+    def has_save_errors(self) -> bool:
+        """Returns whether any download has failed to save.
+
+        Returns:
+            bool: True if any download has failed to save, False otherwise.
+        """
+        return self.download_count > self.save_count
 
     @property
     def browser_defaults(self) -> BrowserDefaults:

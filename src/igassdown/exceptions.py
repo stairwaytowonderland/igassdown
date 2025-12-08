@@ -44,6 +44,10 @@ class TooManyRequestsException(ConnectionException):
     pass
 
 
+class FileSaveException(IgdownloaderException):
+    pass
+
+
 class AbortDownloadException(Exception):
     """
     Exceptions that are not caught in the error catchers inside the download loop,

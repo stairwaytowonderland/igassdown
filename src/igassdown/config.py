@@ -284,9 +284,6 @@ class AssetExtensions(str, Enum):
     JPG: str = "image"
     MP4: str = "video"
 
-    def __str__(self) -> str:
-        return str(self.value)
-
 
 class JsonConfig(Enum):
     """Configuration for JSON output.
@@ -300,6 +297,3 @@ class JsonConfig(Enum):
     INDENT: int = 4
     FILE_INDENT: int = 2
     SORT_KEYS: bool = False
-
-    def __str__(self) -> str:
-        return str(self.value)

@@ -365,11 +365,18 @@ class Igdownloader:
             username: Instagram username to fetch posts for
             output_dir: Base directory in which to save data
         Returns:
-            Tuple[int, List[Dict[str, Any]]]: A tuple containing the download count and a list of post metadata dicts.
+            Tuple[int, List[Dict[str, Any]]]: A tuple containing the download count, and a list of post metadata dicts.
         """
         self.context.log(f"Preparing to retrieve posts for user '{username}'...")
         self.context.prepare_target(username, output_dir)
         all_posts = list(self.paginate_posts())
+        try:
+            if self.context.has_save_errors:
+                raise FileSaveException(
+                    f"Download incomplete: {self.context.download_count} downloaded, {self.context.save_count} saved."
+                )
+        except FileSaveException as e:
+            self.context.error(str(e))
         return (self.context.download_count, all_posts)
 
     def paginate_posts(
@@ -620,10 +627,20 @@ class Igdownloader:
                 )
                 return False
 
-            self.context.download_count += 1
-
             # Save the image
+            self.context.download_count += 1
             self.context.write_raw(response, filepath)
+            self.context.save_count += 1
+
+            if self.context.has_save_errors:
+                self.context.error(
+                    "Failed to save {} to '{}'.".format(
+                        AssetExtensions[ext.upper()].value.lower(),
+                        filepath,
+                    )
+                )
+                return False
+
             if use_media_time:
                 os.utime(filepath, (datetime.now().timestamp(), media.timestamp))
                 self.context.log(
