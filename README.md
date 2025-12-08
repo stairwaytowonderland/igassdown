@@ -10,22 +10,56 @@ All downloaded data is written into an output directory (default: `./output`) in
 
 ## Quick start :surfer:
 
+> [!NOTE]
+> Make sure you [install dependencies](#install-dependencies) first.
+
 Log in once and store a reusable session file (no posts are downloaded):
 
 ```sh
-python3 -m igassdown -l <login-user> --login-only
+python -m igassdown -l <login-user> --login-only
 ```
 
 Log in and download all posts for a target profile into the default `output` directory:
 
 ```sh
-python3 -m igassdown -l <login-user> -t <target-profile>
+python -m igassdown -l <login-user> -t <target-profile>
 ```
 
 Run non‑interactively (suitable for cron) and write to a custom directory:
 
 ```sh
-python3 -m igassdown -l <login-user> -t <target-profile> -o /path/to/output --quiet
+python -m igassdown -l <login-user> -t <target-profile> -o /path/to/output --quiet
+```
+
+## Install Dependencies
+
+It’s recommended to work inside a Python virtual environment so that `igassdown` and its dependencies stay isolated from your system.
+
+**From the project root:**
+
+*On macOS / Linux*
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+
+pip install -r src/requirements/requirements.txt
+```
+
+*On Windows (PowerShell)*
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+pip install --upgrade pip
+pip install -r src\requirements\requirements.txt
+```
+
+After activating the virtual environment and installing dependencies, you can run the CLI as:
+
+```sh
+python -m igassdown --help
 ```
 
 ## Command‑line usage :gear:
@@ -105,25 +139,25 @@ To download from private profiles you control, or to access content only visible
 Download your own posts after logging in interactively:
 
 ```sh
-python3 -m igassdown -l myuser
+python -m igassdown -l myuser
 ```
 
 Download from a private profile you follow, reusing an existing session file:
 
 ```sh
-python3 -m igassdown -l myuser -t friend_profile
+python -m igassdown -l myuser -t friend_profile
 ```
 
 Use cookies from Firefox instead of typing a password:
 
 ```sh
-python3 -m igassdown --load-cookies firefox -t target_profile
+python -m igassdown --load-cookies firefox -t target_profile
 ```
 
 Run as a nightly cron job, aborting on 4xx/5xx errors, with minimal logging:
 
 ```sh
-python3 -m igassdown -l myuser -t target_profile \
+python -m igassdown -l myuser -t target_profile \
 	--abort-on 400,401,403,404,429,500 \
 	--max-connection-attempts 5 \
 	--request-timeout 120 \
