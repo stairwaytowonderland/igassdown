@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 import urllib3
@@ -128,14 +128,17 @@ class MediaAsset:
     Attributes:
         url: URL of the media asset.
         code: Shortcode of the Instagram post.
-        taken_at: Timestamp when the media was taken.
+        id: ID of the Instagram post.
+        date: Date string of when the media was taken.
+        timestamp: Timestamp of when the media was taken.
+        ext: File extension of the media asset (e.g., 'jpg', 'mp4').
     """
 
     id: str
     code: str
     date: str
     timestamp: int
-    ext: Optional[str] = None
+    ext: Optional[AssetExtensions] = None
     url: Optional[str] = None
 
 
@@ -355,19 +358,19 @@ class Igdownloader:
         self,
         username: str,
         output_dir: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[int, List[Dict[str, Any]]]:
         """Retrieve all posts for a given username, saving metadata and assets to output directory.
 
         Args:
             username: Instagram username to fetch posts for
             output_dir: Base directory in which to save data
         Returns:
-            List[Dict[str, Any]]: List of post metadata dicts.
+            Tuple[int, List[Dict[str, Any]]]: A tuple containing the download count and a list of post metadata dicts.
         """
         self.context.log(f"Preparing to retrieve posts for user '{username}'...")
         self.context.prepare_target(username, output_dir)
         all_posts = list(self.paginate_posts())
-        return all_posts
+        return (self.context.download_count, all_posts)
 
     def paginate_posts(
         self,
@@ -520,14 +523,14 @@ class Igdownloader:
 
         # If it's a video post, return the video URL
         if video_versions and len(video_versions) > 0:
-            ext = AssetExtensions.VID.value
+            ext = AssetExtensions.VID
             url = video_versions[index].url
             media_asset.ext = ext
             media_asset.url = url
             return media_asset
 
         elif image_candidates and len(image_candidates) > 0:
-            ext = AssetExtensions.PIC.value
+            ext = AssetExtensions.PIC
             url = image_candidates[index].url
             media_asset.ext = ext
             media_asset.url = url
@@ -564,7 +567,7 @@ class Igdownloader:
             _filename = filename or (
                 f"{media.id}_{media.code}_{convert_timestamp(media.timestamp)}"
             )
-            ext = media.ext
+            ext = media.ext.value
             nominal_filename = f"{filename or _filename}.{ext}"
             filepath = os.path.join(output_dir, nominal_filename)
 

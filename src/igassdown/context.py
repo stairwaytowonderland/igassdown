@@ -58,10 +58,10 @@ class SessionRequest:
 
     def __init__(
         self,
+        session: requests.Session = requests.Session(),
         path: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
         host: str = StandardHeaders.HOST,
-        session: Optional[requests.Session] = None,
         allow_redirects: bool = False,
     ):
         self._path = path
@@ -548,13 +548,12 @@ class IgdownloaderContext:
         # Make a request to Instagram's root URL, which will set the session's csrftoken cookie
         # Not using self.get_json() here, because we need to access the cookie
         # session.get("https://www.instagram.com/")
-        request = SessionRequest(session=session)
+        request = SessionRequest(session)
         request.get("https://www.instagram.com/")
 
         # Add session's csrftoken cookie to session headers
         csrf_token = session.cookies.get_dict()["csrftoken"]
-        session.headers.update({"X-CSRFToken": csrf_token})
-        request.session = session
+        request.session.headers.update({"X-CSRFToken": csrf_token})
 
         self.do_sleep()
         enc_password = "#PWD_INSTAGRAM_BROWSER:0:{}:{}".format(
@@ -626,8 +625,8 @@ class IgdownloaderContext:
                     "Login error: User {} does not exist.".format(user)
                 )
         # '{"authenticated": true, "user": true, "userId": ..., "oneTapPrompt": false, "status": "ok"}'
-        session.headers.update({"X-CSRFToken": login.cookies["csrftoken"]})
-        self._session = session
+        request.session.headers.update({"X-CSRFToken": login.cookies["csrftoken"]})
+        self._session = request.session
         self.username = user
         self.user_id = resp_json["userId"]
 
@@ -647,7 +646,7 @@ class IgdownloaderContext:
             raise InvalidArgumentException("No two-factor authentication pending.")
         (session, user, two_factor_id) = self.two_factor_auth_pending
 
-        login = session.post(
+        login = SessionRequest(session).post(
             "https://www.instagram.com/accounts/login/ajax/two_factor/",
             data={
                 "username": user,
@@ -693,7 +692,7 @@ class IgdownloaderContext:
         self.target = username
         self.asset_dir = asset_dir
         self.asset_urls_file = f"{dir}/{username}_urls.txt"
-        self.asset_json_file = f"{dir}/{username}_urls.json"
+        self.asset_json_file = f"{dir}/{username}_media.json"
         self.post_metadata_file = f"{dir}/{username}_posts.json"
 
         open(self.post_metadata_file, "w").close()
@@ -762,11 +761,11 @@ class IgdownloaderContext:
             ConnectionException: When query repeatedly failed.
         """
         request = SessionRequest(
-            path=path,
-            params=params,
-            host=host,
-            session=session or self._session,
-            allow_redirects=allow_redirects,
+            session or self._session,
+            path,
+            params,
+            host,
+            allow_redirects,
         )
         try:
             self.do_sleep()
@@ -1043,16 +1042,6 @@ class IgdownloaderContext:
                 else:
                     tempsession.cookies.pop("rur", None)
 
-            # Remove headers specific to Desktop version
-            for header in [
-                "Host",
-                "Origin",
-                "Referer",
-                "X-Instagram-AJAX",
-                "X-Requested-With",
-            ]:
-                tempsession.headers.pop(header, None)
-
             # No need for cookies if we have a bearer token
             if "authorization" in tempsession.headers:
                 tempsession.cookies.clear()
@@ -1161,8 +1150,7 @@ class IgdownloaderContext:
             ConnectionException: When download failed.
         """
         with self.get_anonymous_session() as anonymous_session:
-            request = SessionRequest(session=anonymous_session)
-            response = request.get(url, stream=True)
+            response = SessionRequest(anonymous_session).get(url, stream=True)
         if response.status_code == 200:
             response.raw.decode_content = True
             return response

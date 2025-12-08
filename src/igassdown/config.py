@@ -73,42 +73,68 @@ class StandardHeaders:
 
     def __init__(
         self,
-        accept_encoding: str = ACCEPT_ENCODING,
-        accept_language: str = ACCEPT_LANGUAGE,
-        connection: str = CONNECTION,
-        content_length: int = CONTENT_LENGTH,
-        host: str = HOST,
-        origin: str = ORIGIN,
-        referer: str = REFERER,
         user_agent: str = BrowserDefaults.USER_AGENT.value,
-        x_instagram_ajax: int = X_INSTAGRAM_AJAX,
-        x_requested_with: str = X_REQUESTED_WITH,
+        additional_headers: Dict[str, Union[str, int]] = {},
     ) -> None:
-        self.ACCEPT_ENCODING = accept_encoding
-        self.ACCEPT_LANGUAGE = accept_language
-        self.CONNECTION = connection
-        self.CONTENT_LENGTH = content_length
-        self.HOST = host
-        self.ORIGIN = origin
-        self.REFERER = referer
-        self.USER_AGENT = user_agent
-        self.X_INSTAGRAM_AJAX = x_instagram_ajax
-        self.X_REQUESTED_WITH = x_requested_with
+        self.ACCEPT_ENCODING = additional_headers.get(
+            "Accept-Encoding", self.ACCEPT_ENCODING
+        )
+        self.ACCEPT_LANGUAGE = additional_headers.get(
+            "Accept-Language", self.ACCEPT_LANGUAGE
+        )
+        self.CONNECTION = additional_headers.get("Connection", self.CONNECTION)
+        self.ACCEPT_LANGUAGE = additional_headers.get(
+            "Accept-Language", self.ACCEPT_LANGUAGE
+        )
+        self.CONNECTION = additional_headers.get("Connection", self.CONNECTION)
+        self.CONTENT_LENGTH = additional_headers.get(
+            "Content-Length", self.CONTENT_LENGTH
+        )
+        self.HOST = additional_headers.get("Host", self.HOST)
+        self.ORIGIN = additional_headers.get("Origin", self.ORIGIN)
+        self.REFERER = additional_headers.get("Referer", self.REFERER)
+        self.USER_AGENT = additional_headers.get("User-Agent", user_agent)
+        self.X_INSTAGRAM_AJAX = additional_headers.get(
+            "X-Instagram-AJAX", self.X_INSTAGRAM_AJAX
+        )
+        self.X_REQUESTED_WITH = additional_headers.get(
+            "X-Requested-With", self.X_REQUESTED_WITH
+        )
 
     """Initialize StandardHeaders with optional custom values.
 
     Args:
-        accept_encoding: Value for the Accept-Encoding header.
-        accept_language: Value for the Accept-Language header.
-        connection: Value for the Connection header.
-        content_length: Value for the Content-Length header.
-        host: Value for the Host header.
-        origin: Value for the Origin header.
-        referer: Value for the Referer header.
-        user_agent: Value for the User-Agent header.
-        x_instagram_ajax: Value for the X-Instagram-AJAX header.
-        x_requested_with: Value for the X-Requested-With header.
+        user_agent: Custom User-Agent string.
+        additional_headers: Dictionary of additional headers to override defaults.
     """
+
+    def for_empty(self) -> Dict[str, Union[str, int]]:
+        """Sets headers suitable for an anonymous session.
+
+        Returns:
+            Dict[str, Union[str, int]]: A dictionary of HTTP headers for an anonymous session
+        """
+
+        headers = self.to_dict()
+        remove = ["Host", "Origin", "X-Instagram-AJAX", "X-Requested-With"]
+        for key in remove:
+            headers.pop(key, None)
+
+        return headers
+
+    def for_iphone(self) -> Dict[str, Union[str, int]]:
+        """Sets headers suitable for iPhone emulation.
+
+        Returns:
+            Dict[str, Union[str, int]]: A dictionary of HTTP headers for iPhone emulation
+        """
+
+        headers = self.to_dict()
+        remove = ["Host", "Origin", "Referer", "X-Instagram-AJAX", "X-Requested-With"]
+        for key in remove:
+            headers.pop(key, None)
+        # headers["User-Agent"] = IphoneDefaults.USER_AGENT.value
+        return headers
 
     def to_dict(self) -> Dict[str, Union[str, int]]:
         """Returns the headers as a dictionary.
@@ -123,7 +149,7 @@ class StandardHeaders:
             "Content-Length": str(self.CONTENT_LENGTH),
             "Host": self.HOST,
             "Origin": self.ORIGIN,
-            "referer": self.REFERER,
+            "Referer": self.REFERER,
             "User-Agent": str(self.USER_AGENT),
             "X-Instagram-AJAX": str(self.X_INSTAGRAM_AJAX),
             "X-Requested-With": self.X_REQUESTED_WITH,
@@ -198,13 +224,10 @@ class Config:
             Dict[str, str]: A dictionary of HTTP headers.
         """
 
-        header = StandardHeaders(user_agent).to_dict()
+        header = StandardHeaders(user_agent)
         if empty_session_only:
-            del header["Host"]
-            del header["Origin"]
-            del header["X-Instagram-AJAX"]
-            del header["X-Requested-With"]
-        return header
+            return header.for_empty()
+        return header.to_dict()
 
     def default_iphone_headers(self) -> Dict[str, Any]:
         """Returns default HTTP headers for iPhone emulation.
@@ -212,39 +235,41 @@ class Config:
         Returns:
             Dict[str, Any]: A dictionary of HTTP headers for iPhone emulation.
         """
-        return {
-            "User-Agent": IphoneDefaults.USER_AGENT.value,
-            "x-ads-opt-out": "1",
-            "x-bloks-is-panorama-enabled": "true",
-            "x-bloks-version-id": IphoneDefaults.BLOCKS_VERSION_ID.value,
-            "x-fb-client-ip": "True",
-            "x-fb-connection-type": "wifi",
-            "x-fb-http-engine": IphoneDefaults.HTTP_ENGINE.value,
-            "x-fb-server-cluster": "True",
-            "x-fb": "1",
-            "x-ig-abr-connection-speed-kbps": "2",
-            "x-ig-app-id": IphoneDefaults.APP_ID.value,
-            "x-ig-app-locale": "en-US",
-            "x-ig-app-startup-country": "US",
-            "x-ig-bandwidth-speed-kbps": "0.000",
-            "x-ig-capabilities": IphoneDefaults.CAPABILITIES.value,
-            "x-ig-connection-speed": "{}kbps".format(random.randint(1000, 20000)),
-            "x-ig-connection-type": "WiFi",
-            "x-ig-device-locale": "en-US",
-            "x-ig-mapped-locale": "en-US",
-            "x-ig-timezone-offset": str(
-                (
-                    datetime.now().astimezone().utcoffset() or timedelta(seconds=0)
-                ).seconds
-            ),
-            "x-ig-www-claim": "0",
-            "x-pigeon-session-id": str(uuid.uuid4()),
-            "x-tigon-is-retry": "False",
-            "x-whatsapp": "0",
-        }
+        return StandardHeaders(
+            IphoneDefaults.USER_AGENT.value,
+            {
+                "x-ads-opt-out": "1",
+                "x-bloks-is-panorama-enabled": "true",
+                "x-bloks-version-id": IphoneDefaults.BLOCKS_VERSION_ID.value,
+                "x-fb-client-ip": "True",
+                "x-fb-connection-type": "wifi",
+                "x-fb-http-engine": IphoneDefaults.HTTP_ENGINE.value,
+                "x-fb-server-cluster": "True",
+                "x-fb": "1",
+                "x-ig-abr-connection-speed-kbps": "2",
+                "x-ig-app-id": IphoneDefaults.APP_ID.value,
+                "x-ig-app-locale": "en-US",
+                "x-ig-app-startup-country": "US",
+                "x-ig-bandwidth-speed-kbps": "0.000",
+                "x-ig-capabilities": IphoneDefaults.CAPABILITIES.value,
+                "x-ig-connection-speed": "{}kbps".format(random.randint(1000, 20000)),
+                "x-ig-connection-type": "WiFi",
+                "x-ig-device-locale": "en-US",
+                "x-ig-mapped-locale": "en-US",
+                "x-ig-timezone-offset": str(
+                    (
+                        datetime.now().astimezone().utcoffset() or timedelta(seconds=0)
+                    ).seconds
+                ),
+                "x-ig-www-claim": "0",
+                "x-pigeon-session-id": str(uuid.uuid4()),
+                "x-tigon-is-retry": "False",
+                "x-whatsapp": "0",
+            },
+        ).for_iphone()
 
 
-class AssetExtensions(Enum):
+class AssetExtensions(str, Enum):
     """Supported file extensions.
 
     Attributes:
