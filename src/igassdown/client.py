@@ -493,6 +493,7 @@ class Igdownloader:
             self.context.write(
                 media_asset.url,
                 self.context.asset_urls_file,
+                log=False,
             )
             self.context.write_json(
                 media_asset.__dict__,
@@ -501,6 +502,7 @@ class Igdownloader:
             self.download_asset(
                 media_asset,
                 self.context.asset_dir,
+                verbose=False,
             )
 
     @staticmethod
@@ -553,6 +555,7 @@ class Igdownloader:
         filename: Optional[str] = None,
         use_media_time: bool = True,
         force: bool = False,
+        verbose: bool = True,
         _attempt: int = 1,
     ) -> bool:
         """Download a single image from a URL to the specified directory.
@@ -563,7 +566,9 @@ class Igdownloader:
             media: MediaAsset object containing media details
             output_dir: Directory to save the downloaded image
             filename: Optional filename to save as (without extension). If None, a default name is generated.
+            use_media_time: If True, sets file modification time to media timestamp.
             force: If True, forces download even if file exists.
+            verbose: If True, logs download progress.
             _attempt: Current attempt number for retry logic (used internally)
 
         Returns:
@@ -583,16 +588,17 @@ class Igdownloader:
                     "File '{}' already exists. Not downloading {}.".format(
                         filepath, AssetExtensions[ext.upper()].value.lower()
                     ),
-                    flush=True,
+                    print_args={"flush": True},
                 )
                 return False
 
-            self.context.log(
-                "Downloading {} from '{}'...".format(
-                    AssetExtensions[ext.upper()].value.lower(),
-                    media.url,
+            if verbose:
+                self.context.log(
+                    "Downloading {} from '{}'...".format(
+                        AssetExtensions[ext.upper()].value.lower(),
+                        media.url,
+                    )
                 )
-            )
 
             # Download the image
             try:
@@ -623,7 +629,7 @@ class Igdownloader:
                     "File '{}' already exists. Not downloading {}.".format(
                         filepath, AssetExtensions[ext.upper()].value.lower()
                     ),
-                    flush=True,
+                    print_args={"flush": True},
                 )
                 return False
 

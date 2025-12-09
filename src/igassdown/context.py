@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import pickle
 import random
@@ -19,6 +20,8 @@ import requests.utils
 from .config import BrowserDefaults, Config, IphoneDefaults, StandardHeaders
 from .exceptions import *
 from .utils import json_decode, json_encode
+
+logger = logging.getLogger(__name__)
 
 
 def copy_session(
@@ -413,7 +416,7 @@ class IgdownloaderContext:
             if self.raise_all_errors:
                 raise
 
-    def log(self, *msg, sep="", end="\n", flush=False) -> None:
+    def print_log(self, *msg, sep="", end="\n", flush=False) -> None:
         """Log a message to stdout that can be suppressed with --quiet.
 
         Args:
@@ -425,7 +428,30 @@ class IgdownloaderContext:
         if not self.quiet:
             print(*msg, sep=sep, end=end, flush=flush)
 
-    def error(self, msg, repeat_at_end=False) -> None:
+    def log(
+        self,
+        msg,
+        *args,
+        print_args: Optional[Dict[str, Any]] = None,
+        print_only: bool = False,
+        **kwargs,
+    ) -> None:
+        """Log a message to stdout that can be suppressed with --quiet.
+
+        Args:
+            *msg: Variable length argument list to be printed.
+            sep: Separator between arguments.
+            end: String appended after the last value.
+            flush: Whether to forcibly flush the stream.
+        """
+        if not self.quiet:
+            if print_only:
+                kwargs.update(print_args or {})
+                self.print_log(*msg, **kwargs)
+            else:
+                logger.info(msg, *args, **kwargs)
+
+    def print_error(self, msg) -> None:
         """Log a non-fatal error message to stderr, which is repeated at program termination.
 
         Args:
@@ -433,8 +459,29 @@ class IgdownloaderContext:
             repeat_at_end: Set to false if the message should be printed, but not repeated at program termination.
         """
         print(msg, file=sys.stderr)
+
+    def error(
+        self,
+        msg,
+        *args,
+        repeat_at_end=False,
+        print_args: Optional[Dict[str, Any]] = None,
+        print_only: bool = False,
+        **kwargs,
+    ) -> None:
+        """Log a non-fatal error message to stderr, which is repeated at program termination.
+
+        Args:
+            msg: Message to be printed.
+            repeat_at_end: Set to false if the message should be printed, but not repeated at program termination.
+        """
+        if print_only:
+            kwargs.update(print_args or {})
+            self.print_error(msg, **kwargs)
+        else:
+            logger.error(msg, *args, **kwargs)
         if repeat_at_end:
-            self.error_log.append(msg)
+            print(msg, file=sys.stderr)
 
     def get_anonymous_session(self) -> requests.Session:
         """Returns our default anonymous requests.Session object.
@@ -1094,7 +1141,8 @@ class IgdownloaderContext:
             resp: Raw response data as bytes or requests.Response with stream=True.
             filename: Filename to write data into.
         """
-        self.log(f"Saving asset to '{filename}'...", end="\n", flush=True)
+        # self.print_log(f"Saving asset to '{filename}'...", flush=True)
+        self.log(f"Saving asset to '{filename}'...", print_args={"flush": True})
         with open(filename + ".temp", "wb") as file:
             if isinstance(resp, requests.Response):
                 shutil.copyfileobj(resp.raw, file)
@@ -1114,16 +1162,20 @@ class IgdownloaderContext:
             data = file.read()
         return data
 
-    def write(self, content: Union[str, bytes], filename: str, end="\n") -> None:
+    def write(
+        self, content: Union[str, bytes], filename: str, end="\n", log: bool = True
+    ) -> None:
         """Write (append) response data into a file.
 
         Args:
-            resp: Raw response data as bytes or requests.Response with stream=True.
+            content: Content to write into the file.
             filename: Filename to write data into.
             end: String appended after the response.
+            log: Whether to log the content being written.
         """
         with open(filename, "a") as file:
-            self.log(content, end=end, flush=True)
+            if log:
+                self.log(content, print_args={"end": end, "flush": True})
             file.write("{}{}".format(content, end))
 
     def write_json(
@@ -1132,9 +1184,10 @@ class IgdownloaderContext:
         """Write (append) response data into a file.
 
         Args:
-            resp: Raw response data as bytes or requests.Response with stream=True.
+            content: Content to write into the file.
             filename: Filename to write data into.
             end: String appended after the response.
+            log: Whether to log the content being written.
         """
 
         with open(filename, "r") as file:
@@ -1144,7 +1197,7 @@ class IgdownloaderContext:
             else:
                 # If not empty, seek back to the beginning and load the JSON
                 file.seek(0)
-                json_data = json_encode(file, file=True)
+                json_data = json_encode(file)
 
         json_data.append(content)
 
@@ -1152,10 +1205,10 @@ class IgdownloaderContext:
             if log:
                 self.log(
                     json_decode(content, pretty=True),
-                    end=end,
-                    flush=True,
+                    print_args={"end": end, "flush": True},
                 )
-            file.write(json_decode(json_data, pretty=True, file=True))
+            # file.write(json_decode(json_data, pretty=True, file=file))
+            json_decode(json_data, pretty=True, file=file)
 
     def get_raw(self, url: str, _attempt=1) -> requests.Response:
         """Downloads a file anonymously.

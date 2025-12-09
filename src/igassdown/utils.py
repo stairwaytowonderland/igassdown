@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional
+import json
+from io import TextIOWrapper
+from typing import Any, Dict, List, Optional, Union
 
 from .config import JsonConfig
 
@@ -7,7 +9,8 @@ def json_decode(
     str: str,
     pretty: Optional[bool] = None,
     sort: Optional[bool] = None,
-    file: bool = False,
+    file: Optional[TextIOWrapper] = None,
+    **kwargs,
 ) -> str:
     """Convert a JSON object to its string representation.
 
@@ -16,16 +19,15 @@ def json_decode(
         pretty: If True, returns a pretty-printed string.
         sort: If True, sorts the keys in the JSON object.
         file: If True, formats the JSON for file output.
+        **kwargs: Additional keyword arguments for json.dumps/json.dump.
 
     Returns:
         str: A string representation of the JSON object.
     """
-    import json
-
     ind = (
         JsonConfig.INDENT.value
         if pretty and not file
-        else JsonConfig.FILE_INDENT.value if file and pretty else None
+        else JsonConfig.FILE_INDENT.value if file is not None and pretty else None
     )
     sk = JsonConfig.SORT_KEYS.value if sort else None
     sep = None
@@ -33,22 +35,25 @@ def json_decode(
     if not ind or ind <= 0:
         sep = (",", ":")
 
-    return json.dumps(str, indent=ind, sort_keys=sk, separators=sep)
+    if file is not None:
+        json.dump(str, file, indent=ind, sort_keys=sk, separators=sep, **kwargs)
+
+    return json.dumps(str, indent=ind, sort_keys=sk, separators=sep, **kwargs)
 
 
-def json_encode(str: str, file: bool = False) -> Dict[str, Any]:
+def json_encode(str: Union[TextIOWrapper, str], **kwargs) -> Dict[str, Any]:
     """Convert a JSON string to its object representation.
 
     Args:
         str: The JSON string to convert.
-        file: If True, treats the string as file content.
+        **kwargs: Additional keyword arguments for json.loads/json.load.
 
     Returns:
         Dict[str, Any]: A JSON object representation of the string.
     """
-    import json
+    is_file = isinstance(str, TextIOWrapper)
 
-    return json.load(str) if file else json.loads(str)
+    return json.load(str, **kwargs) if is_file else json.loads(str, **kwargs)
 
 
 def dataclass_from_dict(klass, dikt):
