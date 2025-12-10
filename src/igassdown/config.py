@@ -21,7 +21,7 @@ class BrowserDefaults(Enum):
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
     )
     APP_ID: str = "936619743392459"
-    DOC_ID: str = "32820268350897851"
+    DOC_ID: str = "24988324604128423"
 
 
 class IphoneDefaults(Enum):
