@@ -5,6 +5,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Union
 
+from .logging import LoggingConfig
+
 
 class BrowserDefaults(Enum):
     """Default values for browser emulation.
@@ -172,9 +174,21 @@ class Config:
         Args:
             script_dir: The directory of the current script.
         """
+        from . import logging_config
+
+        self._logging_config = logging_config
         self._output_dir = Path(f"{script_dir.parent.parent}/output")
         self._browser_defaults = BrowserDefaults
         self._iphone_defaults = IphoneDefaults
+
+    @property
+    def logging_config(self) -> LoggingConfig:
+        """Returns the logging configuration.
+
+        Returns:
+            LoggingConfig: The logging configuration.
+        """
+        return self._logging_config
 
     @property
     def output_dir(self) -> Path:

@@ -363,6 +363,15 @@ class IgdownloaderContext:
         """
         return bool(self.error_log)
 
+    @property
+    def logger(self) -> logging.Logger:
+        """Returns the configured logger.
+
+        Returns:
+            logging.Logger: The configured logger.
+        """
+        return self.config.logging_config.logger
+
     def close(self) -> None:
         """Print error log and close session"""
         if self.error_log and not self.quiet:
@@ -439,24 +448,29 @@ class IgdownloaderContext:
         """Log a message to stdout that can be suppressed with --quiet.
 
         Args:
-            *msg: Variable length argument list to be printed.
-            sep: Separator between arguments.
-            end: String appended after the last value.
-            flush: Whether to forcibly flush the stream.
+            msg: Message to be printed.
+            print_args: Arguments to be passed to print_log() if print_only is True.
+            print_only: If True, uses print_log() instead of logger.info().
+            *args: Additional positional arguments for logger.info().
+            **kwargs: Additional keyword arguments for logger.info().
         """
         if not self.quiet:
             if print_only:
                 kwargs.update(print_args or {})
                 self.print_log(*msg, **kwargs)
             else:
-                logger.info(msg, *args, **kwargs)
+                self.logger.info(
+                    msg,
+                    stacklevel=self.config.logging_config.LOG_STACKLEVEL,
+                    *args,
+                    **kwargs,
+                )
 
     def print_error(self, msg) -> None:
         """Log a non-fatal error message to stderr, which is repeated at program termination.
 
         Args:
             msg: Message to be printed.
-            repeat_at_end: Set to false if the message should be printed, but not repeated at program termination.
         """
         print(msg, file=sys.stderr)
 
@@ -473,13 +487,23 @@ class IgdownloaderContext:
 
         Args:
             msg: Message to be printed.
-            repeat_at_end: Set to false if the message should be printed, but not repeated at program termination.
+            repeat_at_end: If True, the message is printed again at program termination.
+            print_args: Arguments to be passed to print_error() if print_only is True.
+            print_only: If True, uses print_error() instead of logger.error().
+            *args: Additional positional arguments for logger.error().
+            **kwargs: Additional keyword arguments for logger.error().
         """
         if print_only:
             kwargs.update(print_args or {})
             self.print_error(msg, **kwargs)
         else:
-            logger.error(msg, *args, **kwargs)
+            self.logger.error(
+                msg,
+                stacklevel=self.config.logging_config.LOG_STACKLEVEL,
+                stack_info=True,
+                *args,
+                **kwargs,
+            )
         if repeat_at_end:
             print(msg, file=sys.stderr)
 
