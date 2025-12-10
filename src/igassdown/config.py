@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 from .logging import LoggingConfig
 
@@ -158,7 +158,7 @@ class StandardHeaders:
         }
 
 
-class Config:
+class Config(LoggingConfig):
     """Default output directory.
 
     Attributes:
@@ -167,28 +167,23 @@ class Config:
         iphone_defaults: The default iPhone emulation settings.
     """
 
-    def __init__(self, script_dir: Union[str, Path] = Path(__file__).parent) -> None:
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        script_dir: Union[str, Path] = Path(__file__).parent,
+        **kwargs,
+    ) -> None:
         """
         Initialize the Config class.
 
         Args:
             script_dir: The directory of the current script.
         """
-        from . import logging_config
+        super().__init__(name, stacklevel=2, **kwargs)
 
-        self._logging_config = logging_config
         self._output_dir = Path(f"{script_dir.parent.parent}/output")
         self._browser_defaults = BrowserDefaults
         self._iphone_defaults = IphoneDefaults
-
-    @property
-    def logging_config(self) -> LoggingConfig:
-        """Returns the logging configuration.
-
-        Returns:
-            LoggingConfig: The logging configuration.
-        """
-        return self._logging_config
 
     @property
     def output_dir(self) -> Path:
@@ -217,7 +212,8 @@ class Config:
         """
         return self._iphone_defaults
 
-    def default_user_agent(self) -> str:
+    @staticmethod
+    def default_user_agent() -> str:
         """Returns the default browser User-Agent string.
 
         Returns:
@@ -225,8 +221,9 @@ class Config:
         """
         return BrowserDefaults.USER_AGENT.value
 
+    @staticmethod
     def default_http_headers(
-        self, user_agent: str = None, empty_session_only: bool = False
+        user_agent: str = None, empty_session_only: bool = False
     ) -> Dict[str, str]:
         """Returns default HTTP header we use for requests.
 
@@ -243,7 +240,8 @@ class Config:
             return header.for_empty()
         return header.to_dict()
 
-    def default_iphone_headers(self) -> Dict[str, Any]:
+    @staticmethod
+    def default_iphone_headers() -> Dict[str, Any]:
         """Returns default HTTP headers for iPhone emulation.
 
         Returns:

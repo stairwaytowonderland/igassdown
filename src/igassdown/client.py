@@ -377,7 +377,7 @@ class Igdownloader:
                 )
         except FileSaveException as e:
             self.context.error(str(e))
-        return (self.context.download_count, all_posts)
+        return (self.context.download_count, all_posts or [])
 
     def paginate_posts(
         self,
@@ -415,6 +415,10 @@ class Igdownloader:
             self.context.browser_defaults.DOC_ID.value, variables
         )
 
+        if response is None:
+            self.context.log("No response received.")
+            return posts
+
         # Navigate to the posts data structure
         # timeline_data = response.get("data", {}).get(
         #     "xdt_api__v1__feed__user_timeline_graphql_connection", {}
@@ -432,8 +436,12 @@ class Igdownloader:
         )  # type: TimelineData
 
         feed_data = timeline_data.xdt_api__v1__feed__user_timeline_graphql_connection
-        edges = feed_data.edges
-        page_info = feed_data.page_info
+        edges = feed_data.edges or []
+        page_info = feed_data.page_info or {}
+
+        if len(edges) == 0:
+            self.context.log("No more posts found.")
+            return posts
 
         for post in edges:
             self._extract_asset(post)

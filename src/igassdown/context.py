@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import requests
 import requests.utils
 
+from .base import Base
 from .config import BrowserDefaults, Config, IphoneDefaults, StandardHeaders
 from .exceptions import *
 from .utils import json_decode, json_encode
@@ -370,7 +371,7 @@ class IgdownloaderContext:
         Returns:
             logging.Logger: The configured logger.
         """
-        return self.config.logging_config.logger
+        return self.config.logger
 
     def close(self) -> None:
         """Print error log and close session"""
@@ -461,7 +462,14 @@ class IgdownloaderContext:
             else:
                 self.logger.info(
                     msg,
-                    stacklevel=self.config.logging_config.LOG_STACKLEVEL,
+                    stacklevel=self.config.stacklevel,
+                    *args,
+                    **kwargs,
+                )
+                self.logger.debug(
+                    msg,
+                    stacklevel=self.config.stacklevel,
+                    stack_info=True,
                     *args,
                     **kwargs,
                 )
@@ -499,7 +507,13 @@ class IgdownloaderContext:
         else:
             self.logger.error(
                 msg,
-                stacklevel=self.config.logging_config.LOG_STACKLEVEL,
+                stacklevel=self.config.stacklevel,
+                *args,
+                **kwargs,
+            )
+            self.logger.debug(
+                msg,
+                stacklevel=self.config.stacklevel,
                 stack_info=True,
                 *args,
                 **kwargs,
@@ -592,6 +606,8 @@ class IgdownloaderContext:
         try:
             self.log("Testing login for username '%s'..." % self.username)
             data = self.username_query(self.username)
+            if data is None:
+                raise LoginException("Not logged in.")
             user_id = self.user_id = (
                 data["data"]["user"]["id"] if data["data"]["user"] is not None else None
             )
@@ -822,6 +838,7 @@ class IgdownloaderContext:
             f" when accessing {resp.url}"
         )
 
+    @Base.clean_up_on_error
     def get_json(
         self,
         path: str,
@@ -1016,12 +1033,15 @@ class IgdownloaderContext:
 
             variables_json = json.dumps(variables, separators=(",", ":"))
 
-            resp_json = self.get_json(
-                "graphql/query",
-                params={"query_hash": query_hash, "variables": variables_json},
-                session=tmpsession,
+            resp_json = (
+                self.get_json(
+                    "graphql/query",
+                    params={"query_hash": query_hash, "variables": variables_json},
+                    session=tmpsession,
+                )
+                or None
             )
-        if "status" not in resp_json:
+        if resp_json is None or "status" not in resp_json:
             self.error('GraphQL response did not contain a "status" field.')
         return resp_json
 
@@ -1052,21 +1072,24 @@ class IgdownloaderContext:
 
             variables_json = json.dumps(variables, separators=(",", ":"))
 
-            resp_json = self.get_json(
-                "graphql/query",
-                params={
-                    "variables": variables_json,
-                    "doc_id": doc_id,
-                    "server_timestamps": "true",
-                },
-                session=tmpsession,
-                use_post=True,
+            resp_json = (
+                self.get_json(
+                    "graphql/query",
+                    params={
+                        "variables": variables_json,
+                        "doc_id": doc_id,
+                        "server_timestamps": "true",
+                    },
+                    session=tmpsession,
+                    use_post=True,
+                )
+                or None
             )
-        if "status" not in resp_json:
+        if resp_json is None or "status" not in resp_json:
             self.error('GraphQL response did not contain a "status" field.')
         return resp_json
 
-    def username_query(self, username: str) -> Dict[str, Any]:
+    def username_query(self, username: str) -> Optional[Dict[str, Any]]:
         """Get user profile information by username.
 
         Args:
@@ -1075,10 +1098,13 @@ class IgdownloaderContext:
         Returns:
             Dict[str, Any]: The server's response dictionary.
         """
-        resp_json = self.get_iphone_json(
-            f"api/v1/users/web_profile_info/?username={username}", {}
+        resp_json = (
+            self.get_iphone_json(
+                f"api/v1/users/web_profile_info/?username={username}", {}
+            )
+            or None
         )
-        if "status" not in resp_json:
+        if resp_json is None or "status" not in resp_json:
             self.error('Response did not contain a "status" field.')
         return resp_json
 
@@ -1149,12 +1175,13 @@ class IgdownloaderContext:
                 response_headers=response_headers,
             )
 
-            # Extract the ig-set-* headers and use them in the next request
-            for key, value in response_headers.items():
-                if key.startswith("ig-set-"):
-                    self.iphone_headers[key.replace("ig-set-", "")] = value
-                elif key.startswith("x-ig-set-"):
-                    self.iphone_headers[key.replace("x-ig-set-", "x-ig-")] = value
+            if response:
+                # Extract the ig-set-* headers and use them in the next request
+                for key, value in response_headers.items():
+                    if key.startswith("ig-set-"):
+                        self.iphone_headers[key.replace("ig-set-", "")] = value
+                    elif key.startswith("x-ig-set-"):
+                        self.iphone_headers[key.replace("x-ig-set-", "x-ig-")] = value
 
             return response
 
