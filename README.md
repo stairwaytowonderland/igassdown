@@ -1,6 +1,6 @@
 # Instagram profile asset downloader :rocket:
 
-**_Instagram Profile Asset Downloader_**, or `igassdown` for short, is a small command‑line tool that logs into Instagram and downloads all posts (images and videos) and basic post metadata for a given profile. It is designed to work well for both public and private profiles (when you authenticate), and to be scriptable for batch runs or cron jobs.
+**_Instagram Profile Asset Downloader_**, or `igassdown` for short, is a FREE and open-source command‑line tool that logs into Instagram and downloads all posts (photos and videos) and basic post metadata for a given profile. It is designed to work well for both public and private profiles (when you authenticate), and to be scriptable for batch runs or cron jobs.
 
 All downloaded data is written into an output directory (default: `./output`) in a per‑profile subdirectory. For each profile you get:
 
