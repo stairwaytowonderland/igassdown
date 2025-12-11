@@ -1,5 +1,6 @@
 import logging
 from functools import wraps
+from typing import Optional
 
 from . import __name__ as package_name
 
@@ -13,15 +14,19 @@ class Base:
         _package_name (str): The name of the package/module.
     """
 
-    def __init__(self, name: str) -> None:
+    __base_stacklevel: int = 2
+
+    def __init__(self, name: Optional[str] = None, stacklevel: int = 2) -> None:
         """Initialize the Base class.
 
         Args:
-            name (str): The name of the package/module.
+            name (Optional[str]): The name of the package/module.
+            stacklevel (int): The stack level for logging.
         """
         # from . import __name__ as package_name
 
-        self._package_name = name or package_name
+        self.__package_name = name or package_name
+        self.__base_stacklevel = stacklevel
 
     @property
     def package_name(self) -> str:
@@ -30,7 +35,16 @@ class Base:
         Returns:
             str: The name of the class.
         """
-        return self._package_name
+        return self.__package_name
+
+    @property
+    def base_stacklevel(self) -> int:
+        """Get the base stack level for logging.
+
+        Returns:
+            int: The base stack level.
+        """
+        return self.__base_stacklevel
 
     def clean_up_on_error(func):
         logger = logging.getLogger(__name__)
@@ -44,16 +58,27 @@ class Base:
 
             # if the user hit ctrl-c
             except KeyboardInterrupt:
-                logger.info("Ctrl-C pressed, stopping and cleaning up.")
+                logger.info(
+                    "Ctrl-C pressed, stopping and cleaning up.",
+                    stacklevel=self.config.base_stacklevel,
+                )
 
             # if some other exception got raised which
             # we didn't expect and thus need to be aware of
             except Exception as error:
-                logger.error("Unexpected Exception: %r. Cleaning up.", error)
+                logger.error(
+                    "Unexpected Exception: %r. Cleaning up.",
+                    error,
+                    stacklevel=self.config.base_stacklevel,
+                )
 
             # no matter what, close handlers
             finally:
-                logger.info(f"Running {__name__}.{func.__name__}{(args)}...")
+                self.close()  # Classes that implement the annotation must have a close method
+                logger.info(
+                    f"Running {__name__}.{func.__name__}{(args)}...",
+                    stacklevel=self.config.base_stacklevel,
+                )
 
             # make sure to return
             return return_object

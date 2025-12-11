@@ -18,11 +18,9 @@ import requests
 import requests.utils
 
 from .base import Base
-from .config import BrowserDefaults, Config, IphoneDefaults, StandardHeaders
+from .config import AppConfig, BrowserDefaults, IphoneDefaults, StandardHeaders
 from .exceptions import *
 from .utils import json_decode, json_encode
-
-logger = logging.getLogger(__name__)
 
 
 def copy_session(
@@ -208,7 +206,7 @@ class IgdownloaderContext:
 
     def __init__(
         self,
-        config: Config,
+        config: AppConfig,
         sleep: bool = True,
         quiet: bool = False,
         user_agent: Optional[str] = None,
@@ -232,7 +230,7 @@ class IgdownloaderContext:
             fatal_status_codes: HTTP status codes that should cause an AbortDownloadException.
         """
 
-        self.config = config
+        self._config = config
         self.sleep = sleep
         self.quiet = quiet
         self.user_agent = user_agent or config.default_user_agent()
@@ -265,6 +263,15 @@ class IgdownloaderContext:
 
         self._download_count: int = 0
         self._save_count: int = 0
+
+    @property
+    def config(self) -> AppConfig:
+        """Returns the associated configuration object.
+
+        Returns:
+            AppConfig: The associated configuration object.
+        """
+        return self._config
 
     @property
     def download_count(self) -> int:
@@ -308,7 +315,7 @@ class IgdownloaderContext:
         Returns:
             BrowserDefaults: The browser default settings.
         """
-        return self.config.browser_defaults
+        return self._config.browser_defaults
 
     @property
     def iphone_defaults(self) -> IphoneDefaults:
@@ -317,7 +324,7 @@ class IgdownloaderContext:
         Returns:
             IphoneDefaults: The iPhone default settings.
         """
-        return self.config.iphone_defaults
+        return self._config.iphone_defaults
 
     @property
     def default_http_headers(self) -> Dict[str, str]:
@@ -326,7 +333,7 @@ class IgdownloaderContext:
         Returns:
             Dict[str, str]: Default HTTP headers.
         """
-        return self.config.default_http_headers()
+        return self._config.default_http_headers()
 
     @property
     def default_iphone_headers(self) -> Dict[str, str]:
@@ -335,7 +342,7 @@ class IgdownloaderContext:
         Returns:
             Dict[str, str]: Default iPhone HTTP headers.
         """
-        return self.config.default_iphone_headers()
+        return self._config.default_iphone_headers()
 
     @property
     def output_dir(self) -> Path:
@@ -344,7 +351,7 @@ class IgdownloaderContext:
         Returns:
             Path: The default output directory path.
         """
-        return self.config.output_dir
+        return self._config.output_dir
 
     @property
     def is_logged_in(self) -> bool:
@@ -371,7 +378,7 @@ class IgdownloaderContext:
         Returns:
             logging.Logger: The configured logger.
         """
-        return self.config.logger
+        return self._config.logger
 
     def close(self) -> None:
         """Print error log and close session"""
@@ -379,7 +386,10 @@ class IgdownloaderContext:
             print("\nErrors or warnings occurred:", file=sys.stderr)
             for err in self.error_log:
                 print(err, file=sys.stderr)
+        self.logger.info(f"Closing session for {self.__class__.__name__}...")
         self._session.close()
+        self.logger.info(f"Closing {self.__class__.__name__}...")
+        self._config.close_handlers()
 
     @contextmanager
     def anonymous_copy(self):
@@ -395,7 +405,7 @@ class IgdownloaderContext:
         self._session = self.get_anonymous_session()
         self.username = None
         self.user_id = None
-        self.iphone_headers = self.config.default_iphone_headers()
+        self.iphone_headers = self._config.default_iphone_headers()
         try:
             yield self
         finally:
@@ -460,16 +470,21 @@ class IgdownloaderContext:
                 kwargs.update(print_args or {})
                 self.print_log(*msg, **kwargs)
             else:
-                self.logger.info(
+                level = kwargs.pop("level", logging.INFO)
+                stacklevel = kwargs.pop("stacklevel", self._config.log_stacklevel)
+                stack_info = kwargs.pop("stack_info", None)
+                self.logger.log(
+                    level,
                     msg,
-                    stacklevel=self.config.stacklevel,
+                    stacklevel=stacklevel,
+                    stack_info=stack_info,
                     *args,
                     **kwargs,
                 )
                 self.logger.debug(
                     msg,
-                    stacklevel=self.config.stacklevel,
-                    stack_info=True,
+                    stacklevel=stacklevel,
+                    stack_info=stack_info if stack_info is not None else True,
                     *args,
                     **kwargs,
                 )
@@ -505,16 +520,19 @@ class IgdownloaderContext:
             kwargs.update(print_args or {})
             self.print_error(msg, **kwargs)
         else:
+            stacklevel = kwargs.pop("stacklevel", self._config.log_stacklevel)
+            stack_info = kwargs.pop("stack_info", None)
             self.logger.error(
                 msg,
-                stacklevel=self.config.stacklevel,
+                stacklevel=stacklevel,
+                stack_info=stack_info,
                 *args,
                 **kwargs,
             )
             self.logger.debug(
                 msg,
-                stacklevel=self.config.stacklevel,
-                stack_info=True,
+                stacklevel=stacklevel,
+                stack_info=stack_info if stack_info is not None else True,
                 *args,
                 **kwargs,
             )
@@ -540,7 +558,7 @@ class IgdownloaderContext:
             }
         )
         session.headers.update(
-            self.config.default_http_headers(empty_session_only=True)
+            self._config.default_http_headers(empty_session_only=True)
         )
         # Override default timeout behavior.
         session.request = partial(session.request, timeout=self.request_timeout)
@@ -571,7 +589,7 @@ class IgdownloaderContext:
         """
         session = requests.Session()
         session.cookies = requests.utils.cookiejar_from_dict(sessiondata)
-        session.headers.update(self.config.default_http_headers())
+        session.headers.update(self._config.default_http_headers())
         session.headers.update({"X-CSRFToken": session.cookies.get_dict()["csrftoken"]})
         # Override default timeout behavior.
         session.request = partial(session.request, timeout=self.request_timeout)
@@ -651,7 +669,7 @@ class IgdownloaderContext:
                 "ds_user_id": "",
             }
         )
-        session.headers.update(self.config.default_http_headers())
+        session.headers.update(self._config.default_http_headers())
         # Override default timeout behavior.
         session.request = partial(session.request, timeout=self.request_timeout)
 
@@ -1021,7 +1039,7 @@ class IgdownloaderContext:
         """
         with copy_session(self._session, self.request_timeout) as tmpsession:
             tmpsession.headers.update(
-                self.config.default_http_headers(empty_session_only=True)
+                self._config.default_http_headers(empty_session_only=True)
             )
             del tmpsession.headers["Connection"]
             del tmpsession.headers["Content-Length"]
@@ -1060,7 +1078,7 @@ class IgdownloaderContext:
         """
         with copy_session(self._session, self.request_timeout) as tmpsession:
             tmpsession.headers.update(
-                self.config.default_http_headers(empty_session_only=True)
+                self._config.default_http_headers(empty_session_only=True)
             )
             del tmpsession.headers["Connection"]
             del tmpsession.headers["Content-Length"]

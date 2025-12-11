@@ -1,35 +1,26 @@
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
 
 from .base import Base
 
-LOG_DEFAULT_LEVEL: str = "INFO"
-LOG_DEFAULT_FORMAT: str = (
-    "%(asctime)s - %(levelname)-8s : %(filename)-16s : %(message)s"
-)
-LOG_FILE_DEFAULT_LEVEL: str = "DEBUG"
-LOG_FILE_DEFAULT_FORMAT: str = (
-    "%(asctime)s::%(levelname)s::%(filename)s::%(funcName)s::%(lineno)d::%(message)s"
-)
-LOG_FILE_DEFAULT_EXT: str = "log"
-LOG_DEFAULT_STACKLEVEL: int = 1
 
+@dataclass
+class LoggingConfigDefaults:
+    """Default logging configuration values."""
 
-def _default_log_file_name(
-    name: str = __name__, ext: str = LOG_FILE_DEFAULT_EXT
-) -> str:
-    """Generate a default log file name based on the module name.
-
-    Args:
-        name (str): The module name.
-
-    Returns:
-        str: The default log file name.
-    """
-    module_name = name.split(".")[-1]
-    return f"{module_name}.{ext}"
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = (
+        "%(asctime)s - %(levelname)-8s : %(filename)-16s : %(lineno)-5d : %(message)s"
+    )
+    LOG_FILE_LEVEL: str = "DEBUG"
+    LOG_FILE_FORMAT: str = (
+        "%(asctime)s::%(levelname)s::%(filename)s::%(funcName)s::%(lineno)d::%(message)s"
+    )
+    LOG_FILE_EXT: str = "log"
+    LOG_STACKLEVEL: int = 2
 
 
 class LoggingConfig(Base):
@@ -38,29 +29,48 @@ class LoggingConfig(Base):
     def __init__(
         self,
         name: Optional[str] = None,
-        log_file: Optional[str] = None,
-        stacklevel: int = LOG_DEFAULT_STACKLEVEL,
+        **kwargs,
     ) -> None:
         super().__init__(name)
 
-        _name = self._package_name
-        self._log_file = _default_log_file_name(log_file or _name)
-        self._stacklevel = stacklevel
+        self.__logging_config = LoggingConfigDefaults(**kwargs)
+        self.__stacklevel = self.__logging_config.LOG_STACKLEVEL
+
+        self.calibrate()
+
+        self.__logger.debug(
+            f"Initialized LoggingConfig for package '{self.package_name}' with handlers: {self.__handlers}"
+        )
+
+    def calibrate(self) -> None:
+        """Calibrate logging configuration."""
+        if self.logger:
+            return
+
+        self.__logger = self.setup_logging()
+        self.__handlers = self.__logger.handlers
+
+        self.close_handlers()
+
+    def setup_logging(self):
+        _name = self.package_name
+        _log_file_base = self._log_file_base_name(_name)
 
         _logger = logging.getLogger(_name)
         _logger.setLevel(
             getattr(
                 logging,
-                os.getenv("LOG_FILE_LEVEL", LOG_FILE_DEFAULT_LEVEL).upper(),
+                os.getenv(
+                    "LOG_FILE_LEVEL", self.__logging_config.LOG_FILE_LEVEL
+                ).upper(),
                 logging.DEBUG,
             )
         )
 
-        if not _logger.handlers:
-
+        if len(getattr(_logger, "handlers", [])) == 0:
             console_handler = self._new_handler(
-                level=os.getenv("LOG_LEVEL", LOG_DEFAULT_LEVEL),
-                format=LOG_DEFAULT_FORMAT,
+                level=os.getenv("LOG_LEVEL", self.__logging_config.LOG_LEVEL),
+                format=self.__logging_config.LOG_FORMAT,
                 file=False,
             )
 
@@ -69,16 +79,21 @@ class LoggingConfig(Base):
             for file_handler_level in [logging.INFO, logging.DEBUG]:
                 file_handler = self._new_handler(
                     level=file_handler_level,
-                    format=LOG_FILE_DEFAULT_FORMAT,
-                    file=self.log_level_file_name(self._log_file, file_handler_level),
+                    format=self.__logging_config.LOG_FILE_FORMAT,
+                    file=self.log_level_file_name(_log_file_base, file_handler_level),
                 )
                 _logger.addHandler(file_handler)
 
-        self._logger = _logger
+        return _logger
 
     @property
-    def stacklevel(self) -> int:
-        return self._stacklevel
+    def log_stacklevel(self) -> int:
+        """Returns the stack level for logging.
+
+        Returns:
+            int: The stack level for logging.
+        """
+        return self.__stacklevel
 
     @property
     def logger(self) -> logging.Logger:
@@ -87,7 +102,7 @@ class LoggingConfig(Base):
         Returns:
             logging.Logger: The configured logger.
         """
-        return self._logger
+        return getattr(self, "_LoggingConfig__logger", None)
 
     @staticmethod
     def get_logger(name: str) -> logging.Logger:
@@ -105,6 +120,21 @@ class LoggingConfig(Base):
     def log_level_file_name(filename: str, level: int) -> str:
         name = Path(filename).stem
         return f"{name.split('.')[-1]}_{logging.getLevelName(level).lower()}.log"
+
+    def _log_file_base_name(
+        self, name: str = __name__, ext: Optional[str] = None
+    ) -> str:
+        """Generate a default log file name based on the module name.
+
+        Args:
+            name (str): The module name.
+            ext (Optional[str]): The file extension for the log file.
+
+        Returns:
+            str: The default log file name.
+        """
+        module_name = name.split(".")[-1]
+        return f"{module_name}.{ext or self.__logging_config.LOG_FILE_EXT}"
 
     def _new_handler(
         self,
@@ -138,9 +168,11 @@ class LoggingConfig(Base):
             _level = (
                 level
                 if isinstance(level, int)
-                else getattr(logging, level.upper(), LOG_DEFAULT_LEVEL.upper())
+                else getattr(
+                    logging, level.upper(), self.__logging_config.LOG_LEVEL.upper()
+                )
             )
-            _fmt = format or LOG_DEFAULT_FORMAT
+            _fmt = format or self.__logging_config.LOG_FORMAT
         else:
             _level = (
                 level
@@ -148,12 +180,14 @@ class LoggingConfig(Base):
                 else getattr(
                     logging,
                     level.upper(),
-                    os.getenv("LOG_FILE_LEVEL", LOG_FILE_DEFAULT_LEVEL).upper(),
+                    os.getenv(
+                        "LOG_FILE_LEVEL", self.__logging_config.LOG_FILE_LEVEL
+                    ).upper(),
                 )
             )
 
             _file = file if isinstance(file, str) else self.log_level_file_name(_level)
-            _fmt = format or LOG_FILE_DEFAULT_FORMAT
+            _fmt = format or self.__logging_config.LOG_FILE_FORMAT
             handler = logging.FileHandler(_file)
 
         handler.setLevel(_level)
@@ -162,3 +196,16 @@ class LoggingConfig(Base):
         handler.addFilter(LevelFilter(_level))
 
         return handler
+
+    def close_handlers(self) -> None:
+        root_logger = logging.getLogger()
+        for handler in self.__handlers or []:
+            try:
+                self.__logger.debug(
+                    f"Removing handler {handler} from root logger {root_logger}"
+                )
+                root_logger.removeHandler(handler)
+                handler.close()
+            except ValueError:
+                # not in the list of handlers
+                pass

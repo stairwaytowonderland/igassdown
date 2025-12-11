@@ -8,6 +8,11 @@ except ImportError:
 else:
     win_unicode_console.enable()
 
+from pathlib import Path
+
 from .client import Igdownloader as Igdownloader
 from .context import IgdownloaderContext as IgdownloaderContext
 from .exceptions import *
+
+OUTPUT_DIR = f"{Path(__file__).parent.parent.parent}/output"
+PACKAGE_NAME = __name__

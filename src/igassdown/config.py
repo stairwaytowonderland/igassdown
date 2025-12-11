@@ -158,7 +158,7 @@ class StandardHeaders:
         }
 
 
-class Config(LoggingConfig):
+class AppConfig(LoggingConfig):
     """Default output directory.
 
     Attributes:
@@ -169,8 +169,8 @@ class Config(LoggingConfig):
 
     def __init__(
         self,
+        output_dir: Optional[Path] = None,
         name: Optional[str] = None,
-        script_dir: Union[str, Path] = Path(__file__).parent,
         **kwargs,
     ) -> None:
         """
@@ -179,9 +179,9 @@ class Config(LoggingConfig):
         Args:
             script_dir: The directory of the current script.
         """
-        super().__init__(name, stacklevel=2, **kwargs)
+        super().__init__(name, **kwargs)
 
-        self._output_dir = Path(f"{script_dir.parent.parent}/output")
+        self._output_dir = output_dir
         self._browser_defaults = BrowserDefaults
         self._iphone_defaults = IphoneDefaults
 

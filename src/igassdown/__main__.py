@@ -8,6 +8,8 @@ from enum import IntEnum
 from typing import List, Optional
 
 from . import (
+    OUTPUT_DIR,
+    PACKAGE_NAME,
     BadCredentialsException,
     Igdownloader,
     IgdownloaderException,
@@ -16,7 +18,7 @@ from . import (
     TwoFactorAuthRequiredException,
 )
 from .client import get_default_session_filename
-from .config import Config
+from .config import AppConfig
 
 try:
     import browser_cookie3
@@ -201,7 +203,7 @@ def _main(
 
 
 def main() -> None:
-    config = Config()
+    config = AppConfig(OUTPUT_DIR, PACKAGE_NAME, LOG_STACKLEVEL=4)
     parser = ArgumentParser(
         description=__doc__,
         add_help=False,

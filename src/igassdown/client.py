@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import requests
 import urllib3
 
-from .config import AssetExtensions, Config
+from .config import AppConfig, AssetExtensions
 from .context import IgdownloaderContext
 from .exceptions import *
 from .structures import IGFeedRequestVariables, PostNode, TimelineData, VideoCandidate
@@ -152,7 +152,7 @@ class Igdownloader:
 
     def __init__(
         self,
-        config: Config,
+        config: AppConfig,
         sleep: bool = True,
         quiet: bool = False,
         user_agent: Optional[str] = None,
@@ -597,6 +597,7 @@ class Igdownloader:
                         filepath, AssetExtensions[ext.upper()].value.lower()
                     ),
                     print_args={"flush": True},
+                    stacklevel=self.context.config.log_stacklevel - 0,
                 )
                 return False
 
@@ -605,7 +606,8 @@ class Igdownloader:
                     "Downloading {} from '{}'...".format(
                         AssetExtensions[ext.upper()].value.lower(),
                         media.url,
-                    )
+                    ),
+                    stacklevel=self.context.config.log_stacklevel - 0,
                 )
 
             # Download the image
@@ -616,7 +618,8 @@ class Igdownloader:
                     "Retrying download of {} from '{}' without session...".format(
                         (AssetExtensions[ext.upper()].value.lower()),
                         media.url,
-                    )
+                    ),
+                    stacklevel=self.context.config.log_stacklevel - 0,
                 )
                 response = requests.get(media.url, timeout=30)
                 response.raise_for_status()
@@ -638,6 +641,7 @@ class Igdownloader:
                         filepath, AssetExtensions[ext.upper()].value.lower()
                     ),
                     print_args={"flush": True},
+                    stacklevel=self.context.config.log_stacklevel - 0,
                 )
                 return False
 
@@ -660,7 +664,8 @@ class Igdownloader:
                 self.context.log(
                     "Set file modification time to {}.".format(
                         convert_timestamp(media.timestamp, pretty=True)
-                    )
+                    ),
+                    stacklevel=self.context.config.log_stacklevel - 0,
                 )
 
             return True
