@@ -202,8 +202,9 @@ def _main(
     return exit_code
 
 
-def main() -> None:
-    config = AppConfig(OUTPUT_DIR, PACKAGE_NAME, LOG_STACKLEVEL=4)
+def main(
+    config: AppConfig = AppConfig(OUTPUT_DIR, PACKAGE_NAME, LOG_STACKLEVEL=4)
+) -> None:
     parser = ArgumentParser(
         description=__doc__,
         add_help=False,
