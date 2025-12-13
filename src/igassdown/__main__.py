@@ -188,10 +188,10 @@ def _main(
     # Extract all posts
     if not login_only:
         try:
-            download_count, _ = igdownloader.get_posts(
-                username=target_profile, output_dir=output_dir
+            igdownloader.get_posts(username=target_profile, output_dir=output_dir)
+            igdownloader.context.log(
+                f"Assets downloaded: {igdownloader.context.download_count}"
             )
-            igdownloader.context.log(f"Assets downloaded: {download_count}")
         except Exception as e:
             exit_code = ExitCode.UNEXPECTED_ERROR
             print(

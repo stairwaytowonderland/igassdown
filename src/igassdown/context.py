@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import requests
 import requests.utils
 
-from .base import Base
+from .base import clean_up_on_error
 from .config import AppConfig, BrowserDefaults, IphoneDefaults, StandardHeaders
 from .exceptions import *
 from .utils import json_decode, json_encode
@@ -388,7 +388,7 @@ class IgdownloaderContext:
                 print(err, file=sys.stderr)
         self.logger.info(f"Closing session for {self.__class__.__name__}...")
         self._session.close()
-        self.logger.info(f"Closing {self.__class__.__name__}...")
+        self.logger.info(f"Closing handlers for {self.__class__.__name__}...")
         self._config.close_handlers()
 
     @contextmanager
@@ -856,7 +856,7 @@ class IgdownloaderContext:
             f" when accessing {resp.url}"
         )
 
-    @Base.clean_up_on_error
+    @clean_up_on_error
     def get_json(
         self,
         path: str,
