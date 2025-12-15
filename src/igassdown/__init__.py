@@ -15,4 +15,4 @@ from .context import IgdownloaderContext as IgdownloaderContext
 from .exceptions import *
 
 OUTPUT_DIR = f"{Path(__file__).parent.parent.parent}/output"
-PACKAGE_NAME = __name__
+PACKAGE_NAME = __package__ or __name__

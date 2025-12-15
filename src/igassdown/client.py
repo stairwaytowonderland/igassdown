@@ -1,4 +1,5 @@
 import getpass
+import logging
 import os
 import platform
 import sys
@@ -7,7 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 import requests
 import urllib3
@@ -192,19 +193,37 @@ class Igdownloader:
         return self._context
 
     @property
+    def config(self) -> AppConfig:
+        """The associated :class:`AppConfig` configuration object.
+
+        Returns:
+            AppConfig: The associated configuration.
+        """
+        return self._context.config
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Returns the configured logger.
+
+        Returns:
+            logging.Logger: The configured logger.
+        """
+        return self._context.logger
+
+    @property
     def has_stored_errors(self) -> bool:
         """Returns whether any error has been reported and stored to be repeated at program termination.
 
         Returns:
             bool: True if there are stored errors, False otherwise.
         """
-        return self.context.has_stored_errors
+        return self._context.has_stored_errors
 
     @contextmanager
     def anonymous_copy(self):
         """Yield an anonymous, otherwise equally-configured copy of an :class:`Igdownloader` instance; Then copy its error log."""
         new_loader = Igdownloader(
-            config=self.context.config,
+            config=self.config,
             sleep=self.context.sleep,
             quiet=self.context.quiet,
             user_agent=self.context.user_agent,
@@ -358,31 +377,27 @@ class Igdownloader:
         self,
         username: str,
         output_dir: Optional[str] = None,
-    ) -> Tuple[int, List[Dict[str, Any]]]:
+    ) -> List[Dict[str, Any]]:
         """Retrieve all posts for a given username, saving metadata and assets to output directory.
 
         Args:
             username: Instagram username to fetch posts for
             output_dir: Base directory in which to save data
+
         Returns:
-            Tuple[int, List[Dict[str, Any]]]: A tuple containing the download count, and a list of post metadata dicts.
+            List[Dict[str, Any]]: List of all posts from all pages
         """
         self.context.log(f"Preparing to retrieve posts for user '{username}'...")
         self.context.prepare_target(username, output_dir)
-        all_posts = list(self.paginate_posts())
-        try:
-            if self.context.has_save_errors:
-                raise FileSaveException(
-                    f"Download incomplete: {self.context.download_count} downloaded, {self.context.save_count} saved."
-                )
-        except FileSaveException as e:
-            self.context.error(str(e))
-        return (self.context.download_count, all_posts or [])
+        self.all_posts = list(self.paginate_posts())
+        if self.context.has_save_errors:
+            raise FileSaveException(
+                f"Download incomplete: {self.context.download_count} downloaded, {self.context.save_count} saved."
+            )
+        return self.all_posts
 
     def paginate_posts(
         self,
-        username: Optional[str] = None,
-        output_dir: Optional[str] = None,
         after: str = None,
         _posts: List = None,
     ) -> List[Dict[str, Any]]:
@@ -397,10 +412,7 @@ class Igdownloader:
         Returns:
             List[Dict[str, Any]]: List of all posts from all pages
         """
-        if username and output_dir:
-            self.context.prepare_target(username, output_dir)
-
-        target = username or self.context.target
+        target = self.context.target
         posts = _posts or []
 
         self.context.log(f"Fetching posts (cursor: {after})...")
@@ -455,9 +467,7 @@ class Igdownloader:
 
         if has_next_page and end_cursor:
             # Recursive call with the next cursor
-            return self.paginate_posts(
-                username, output_dir, after=end_cursor, _posts=posts
-            )
+            return self.paginate_posts(after=end_cursor, _posts=posts)
         else:
             self.context.log(f"Pagination complete. Total posts fetched: {len(posts)}")
             return posts
@@ -597,7 +607,7 @@ class Igdownloader:
                         filepath, AssetExtensions[ext.upper()].value.lower()
                     ),
                     print_args={"flush": True},
-                    stacklevel=self.context.config.log_stacklevel - 0,
+                    stacklevel=self.config.log_stacklevel - 0,
                 )
                 return False
 
@@ -607,7 +617,7 @@ class Igdownloader:
                         AssetExtensions[ext.upper()].value.lower(),
                         media.url,
                     ),
-                    stacklevel=self.context.config.log_stacklevel - 0,
+                    stacklevel=self.config.log_stacklevel - 0,
                 )
 
             # Download the image
@@ -619,7 +629,7 @@ class Igdownloader:
                         (AssetExtensions[ext.upper()].value.lower()),
                         media.url,
                     ),
-                    stacklevel=self.context.config.log_stacklevel - 0,
+                    stacklevel=self.config.log_stacklevel - 0,
                 )
                 response = requests.get(media.url, timeout=30)
                 response.raise_for_status()
@@ -641,7 +651,7 @@ class Igdownloader:
                         filepath, AssetExtensions[ext.upper()].value.lower()
                     ),
                     print_args={"flush": True},
-                    stacklevel=self.context.config.log_stacklevel - 0,
+                    stacklevel=self.config.log_stacklevel - 0,
                 )
                 return False
 
@@ -665,7 +675,7 @@ class Igdownloader:
                     "Set file modification time to {}.".format(
                         convert_timestamp(media.timestamp, pretty=True)
                     ),
-                    stacklevel=self.context.config.log_stacklevel - 0,
+                    stacklevel=self.config.log_stacklevel - 0,
                 )
 
             return True

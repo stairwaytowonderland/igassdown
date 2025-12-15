@@ -26,20 +26,23 @@ class LoggingConfigDefaults:
 class LoggingConfig(Base):
     """Configuration for logging."""
 
+    USE_ROOT_LOGGER: bool = True
+
     def __init__(
         self,
         name: Optional[str] = None,
+        use_root_logger: bool = USE_ROOT_LOGGER,
         **kwargs,
     ) -> None:
         super().__init__(name)
-
+        self.USE_ROOT_LOGGER = use_root_logger
         self.__logging_config = LoggingConfigDefaults(**kwargs)
         self.__stacklevel = self.__logging_config.LOG_STACKLEVEL
 
         self.calibrate()
 
         self.__logger.debug(
-            f"Initialized LoggingConfig for package '{self.package_name}' with handlers: {self.__handlers}"
+            f"Initialized LoggingConfig for package '{self.__package__}' with handlers: {self.__handlers}"
         )
 
     def calibrate(self) -> None:
@@ -48,33 +51,33 @@ class LoggingConfig(Base):
             return
 
         self.__logger = self.setup_logging()
-        self.__handlers = self.__logger.handlers
 
-        self.close_handlers()
+        if self.USE_ROOT_LOGGER:
+            self.__logger.debug("Using root logger; skipping handler cleanup.")
+            self.__logger.debug(
+                f"Logging configured for package '{self.__package__}' with handlers: {logging.getLogger().handlers}"
+            )
+        else:
+            self.close_handlers()
+            self.__logger.debug(
+                f"Logging configured for package '{self.__package__}' with handlers: {self.__logger.handlers}"
+            )
 
-    def setup_logging(self):
-        _name = self.package_name
+    def setup_logging(self) -> logging.Logger:
+        _name = self.__package__
         _log_file_base = self._log_file_base_name(_name)
 
-        _logger = logging.getLogger(_name)
-        _logger.setLevel(
-            getattr(
-                logging,
-                os.getenv(
-                    "LOG_FILE_LEVEL", self.__logging_config.LOG_FILE_LEVEL
-                ).upper(),
-                logging.DEBUG,
-            )
-        )
+        _handlers = getattr(self, "_LoggingConfig__handlers", [])
 
-        if len(getattr(_logger, "handlers", [])) == 0:
+        if len(_handlers) == 0:
+            handlers = []
             console_handler = self._new_handler(
                 level=os.getenv("LOG_LEVEL", self.__logging_config.LOG_LEVEL),
                 format=self.__logging_config.LOG_FORMAT,
                 file=False,
             )
-
-            _logger.addHandler(console_handler)
+            handlers.append(console_handler)
+            # _logger.addHandler(console_handler)
 
             for file_handler_level in [logging.INFO, logging.DEBUG]:
                 file_handler = self._new_handler(
@@ -82,9 +85,34 @@ class LoggingConfig(Base):
                     format=self.__logging_config.LOG_FILE_FORMAT,
                     file=self.log_level_file_name(_log_file_base, file_handler_level),
                 )
-                _logger.addHandler(file_handler)
+                handlers.append(file_handler)
+                # _logger.addHandler(file_handler)
 
-        return _logger
+        if self.USE_ROOT_LOGGER:
+            logging.basicConfig(handlers=handlers, force=True)
+            _logger = logging.getLogger(_name)
+            self.__handlers = handlers or []
+        else:
+            _logger = logging.getLogger(_name)
+            for handler in handlers:
+                _logger.addHandler(handler)
+            self.__handlers = _logger.handlers or []
+
+        logger = None
+        if _logger is not None:
+            logger = _logger
+
+            logger.setLevel(
+                getattr(
+                    logging,
+                    os.getenv(
+                        "LOG_FILE_LEVEL", self.__logging_config.LOG_FILE_LEVEL
+                    ).upper(),
+                    logging.DEBUG,
+                )
+            )
+
+        return logger
 
     @property
     def log_stacklevel(self) -> int:
@@ -198,11 +226,13 @@ class LoggingConfig(Base):
         return handler
 
     def close_handlers(self) -> None:
+        if self.USE_ROOT_LOGGER:
+            return
         root_logger = logging.getLogger()
-        for handler in self.__handlers or []:
+        for handler in self.__handlers:
             try:
                 self.__logger.debug(
-                    f"Removing handler {handler} from root logger {root_logger}"
+                    f"If it exists, the {handler} will be removed from root logger {root_logger}"
                 )
                 root_logger.removeHandler(handler)
                 handler.close()
