@@ -47,7 +47,7 @@ class Base:
         """
         return self.__name
 
-    def _close_handlers(
+    def close(
         handlers: List[logging.Handler] = [], close_method: Callable = None, **kwargs
     ) -> None:
         if callable(close_method):
@@ -121,7 +121,7 @@ class Base:
             # no matter what, close handlers
             finally:
                 # self.close()  # Requires that functions have a 'close' method
-                Base._close_handlers(logger.handlers, close_method)
+                Base.close(logger.handlers, close_method)
                 if instance == args[0]:
                     del args[0]
                 logger.info(

@@ -228,14 +228,4 @@ class LoggingConfig(Base):
     def close_handlers(self) -> None:
         if self.USE_ROOT_LOGGER:
             return
-        root_logger = logging.getLogger()
-        for handler in self.__handlers:
-            try:
-                self.__logger.debug(
-                    f"If it exists, the {handler} will be removed from root logger {root_logger}"
-                )
-                root_logger.removeHandler(handler)
-                handler.close()
-            except ValueError:
-                # not in the list of handlers
-                pass
+        Base.close(self, self.__handlers)
